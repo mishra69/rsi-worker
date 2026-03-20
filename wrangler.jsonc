@@ -1,0 +1,12 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "rsi-stock-tracker",
+  "main": "src/index.js",
+  "compatibility_date": "2024-12-01",
+  "kv_namespaces": [
+    {
+      "binding": "RSI_KV",
+      "id": "eaa519b387234ce49c0aa2cfb25c7fd0"
+    }
+  ]
+}
