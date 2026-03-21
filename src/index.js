@@ -85,6 +85,7 @@ async function fetchRSI(ticker) {
       zone: getZone(rsi),
       price: Math.round(lastClose * 100) / 100,
       changePercent: Math.round(changePercent * 100) / 100,
+      marketState: result.meta?.marketState ?? null,
       error: null,
     };
   } catch (err) {
@@ -1013,6 +1014,7 @@ async function processSubscriber(sub, env) {
     const buys = [], sells = [];
     for (const r of results) {
       if (r.rsi === null) continue;
+      if (r.marketState !== "REGULAR") continue; // only alert on actively trading tickers
       const prev = prevSnap[r.ticker];
       if (prev === undefined) continue; // no previous data, skip first run
       const isIndex = indexTickers.has(r.ticker);
@@ -1308,15 +1310,8 @@ export default {
     const subs = JSON.parse((await env.RSI_KV.get("subscribers")) || "[]");
     if (subs.length === 0) return;
 
-    // Market hours check: ET approx UTC 13:00–20:30 (Mon–Fri)
-    const now = new Date();
-    const utcMins = now.getUTCHours() * 60 + now.getUTCMinutes();
-    const inMarketHours = utcMins >= 13 * 60 && utcMins <= 20 * 60 + 30;
-
-    // Run test-mode subscribers regardless of market hours; skip others if outside hours
-    const toProcess = subs.filter(sub => sub.testMode || inMarketHours);
-    if (toProcess.length === 0) return;
-
-    ctx.waitUntil(Promise.all(toProcess.map(sub => processSubscriber(sub, env))));
+    // No market hours gate — per-ticker marketState filters crossings in processSubscriber.
+    // This allows alerts to work correctly for any exchange (US, India, etc.).
+    ctx.waitUntil(Promise.all(subs.map(sub => processSubscriber(sub, env))));
   },
 };
