@@ -86,6 +86,7 @@ async function fetchRSI(ticker) {
       price: Math.round(lastClose * 100) / 100,
       changePercent: Math.round(changePercent * 100) / 100,
       marketState: result.meta?.marketState ?? null,
+      currency: result.meta?.currency ?? null,
       error: null,
     };
   } catch (err) {
@@ -298,7 +299,7 @@ const HTML = `<!DOCTYPE html>
 
     .table-header, .table-row {
       display: grid;
-      grid-template-columns: 90px 84px 68px 1fr 80px;
+      grid-template-columns: 120px 84px 68px 1fr 80px;
       gap: 12px; padding: 10px 20px; align-items: center;
     }
     .table-header {
@@ -317,7 +318,8 @@ const HTML = `<!DOCTYPE html>
     .table-row.alert-oversold { background: rgba(0,230,118,0.06); border-left-color: var(--green); }
     .table-row.alert-overbought { background: rgba(255,82,82,0.06); border-left-color: var(--red); }
 
-    .col-ticker { font-family: var(--mono); font-weight: 700; font-size: 14px; letter-spacing: 0.5px; }
+    .col-ticker { font-family: var(--mono); font-weight: 700; font-size: 14px; letter-spacing: 0.5px; display: flex; align-items: center; gap: 4px; overflow: hidden; }
+    .ticker-text { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; min-width: 0; }
     .col-price { font-family: var(--mono); font-size: 13px; color: var(--text-dim); }
     .col-change { font-family: var(--mono); font-size: 12px; }
     .col-change.up { color: var(--green); }
@@ -350,7 +352,7 @@ const HTML = `<!DOCTYPE html>
     }
 
     .table-header-all, .table-row-all {
-      grid-template-columns: 90px 84px 68px 1fr 80px 90px !important;
+      grid-template-columns: 120px 84px 68px 1fr 80px 90px !important;
     }
     .col-signal {
       font-family: var(--mono); font-size: 10px; font-weight: 600;
@@ -366,11 +368,11 @@ const HTML = `<!DOCTYPE html>
     @media (max-width: 700px) {
       body { padding: 16px 12px; }
       .table-header, .table-row {
-        grid-template-columns: 64px 68px 56px 1fr 60px;
+        grid-template-columns: 90px 68px 56px 1fr 60px;
         gap: 6px; padding: 10px 12px;
       }
       .table-header-all, .table-row-all {
-        grid-template-columns: 60px 64px 48px 1fr 52px 52px !important;
+        grid-template-columns: 90px 64px 48px 1fr 52px 52px !important;
       }
       .col-ticker { font-size: 12px; }
       .col-rsi { font-size: 16px; }
@@ -579,6 +581,14 @@ const HTML = `<!DOCTYPE html>
     };
     let refreshInterval = null;
 
+    function currencySymbol(c) {
+      if (c === "INR") return "₹";
+      if (c === "EUR") return "€";
+      if (c === "GBP") return "£";
+      if (c === "JPY") return "¥";
+      return "$";
+    }
+
     const $ = (sel) => document.querySelector(sel);
     const tickersInput = $("#tickersInput");
     const indexTickersInput = $("#indexTickersInput");
@@ -663,8 +673,8 @@ const HTML = `<!DOCTYPE html>
         const chgStr = s.changePercent != null ? (s.changePercent > 0 ? "+" : "") + s.changePercent + "%" : "";
         const rsiPct = s.rsi != null ? Math.min(100, Math.max(0, s.rsi)) : 0;
         return '<div class="table-row" style="animation-delay:' + (i * 40) + 'ms">' +
-          '<span class="col-ticker">' + s.ticker + (isIndex ? ' <span class="index-tag">I</span>' : '') + '</span>' +
-          '<span class="col-price">' + (s.price != null ? "$" + s.price.toLocaleString() : "—") + '</span>' +
+          '<span class="col-ticker"><span class="ticker-text">' + s.ticker + '</span>' + (isIndex ? '<span class="index-tag">I</span>' : '') + '</span>' +
+          '<span class="col-price">' + (s.price != null ? currencySymbol(s.currency) + s.price.toLocaleString() : "—") + '</span>' +
           '<span class="col-change ' + chgClass + '">' + chgStr + '</span>' +
           '<div class="rsi-bar">' +
             '<div class="marker" style="left:30%"></div>' +
@@ -756,8 +766,8 @@ const HTML = `<!DOCTYPE html>
           const chgStr = s.changePercent != null ? (s.changePercent > 0 ? "+" : "") + s.changePercent + "%" : "";
           const rsiPct = s.rsi != null ? Math.min(100, Math.max(0, s.rsi)) : 0;
           return '<div class="table-row table-row-all" style="animation-delay:' + (i * 30) + 'ms">' +
-            '<span class="col-ticker">' + s.ticker + (isIndex ? ' <span class="index-tag">I</span>' : '') + '</span>' +
-            '<span class="col-price">' + (s.price != null ? "$" + s.price.toLocaleString() : "—") + '</span>' +
+            '<span class="col-ticker"><span class="ticker-text">' + s.ticker + '</span>' + (isIndex ? '<span class="index-tag">I</span>' : '') + '</span>' +
+            '<span class="col-price">' + (s.price != null ? currencySymbol(s.currency) + s.price.toLocaleString() : "—") + '</span>' +
             '<span class="col-change ' + chgClass + '">' + chgStr + '</span>' +
             '<div class="rsi-bar">' +
               '<div class="marker" style="left:30%"></div>' +
