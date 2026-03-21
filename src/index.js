@@ -205,6 +205,13 @@ const HTML = `<!DOCTYPE html>
     .btn:disabled { color: var(--text-muted); cursor: wait; background: #1e293b; }
     .btn-refresh { padding: 6px 16px; font-size: 11px; }
 
+    .checkbox-label {
+      display: flex; align-items: center; gap: 8px; cursor: pointer;
+      font-family: var(--mono); font-size: 10px; color: var(--text-muted);
+      letter-spacing: 0.5px;
+    }
+    .checkbox-label input[type="checkbox"] { accent-color: var(--green); cursor: pointer; }
+
     .saved-flash {
       font-family: var(--mono); font-size: 10px;
       color: var(--green); opacity: 0;
@@ -407,6 +414,39 @@ const HTML = `<!DOCTYPE html>
       </div>
     </div>
 
+    <div class="config-panel" style="margin-bottom:16px;" id="telegramPanel">
+      <button class="config-toggle" id="telegramToggle">
+        <span>TELEGRAM ALERTS</span>
+        <span class="arrow" id="telegramArrow">▾</span>
+      </button>
+      <div class="config-body hidden" id="telegramBody">
+        <div id="subStatusBox"></div>
+        <div id="subInstructions" style="display:none;">
+          <p class="hint" style="margin-bottom:12px;">To subscribe, send this command to <b style="color:var(--text)">@abhi_284_rsi_alert_bot</b> on Telegram:</p>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <input class="field-input" id="subCommandInput" type="text" readonly style="color:var(--text-muted);cursor:default;font-size:12px;">
+            <button class="btn" id="copySubBtn" style="align-self:stretch;white-space:nowrap;">COPY</button>
+          </div>
+          <p class="hint" style="margin-top:10px;">After sending the command, click <b style="color:var(--text)">Check status</b> below to confirm.</p>
+          <div style="display:flex;gap:8px;margin-top:4px;">
+            <button class="btn" id="checkSubBtn">CHECK STATUS</button>
+          </div>
+        </div>
+        <div id="subConfirmed" style="display:none;">
+          <p class="hint" style="margin-bottom:14px;color:var(--green);">✓ Subscribed — alerts fire every 15 min during US market hours when a ticker crosses its threshold.</p>
+          <label class="checkbox-label" style="margin-bottom:14px;">
+            <input type="checkbox" id="testModeChk">
+            <span>Test mode — send a snapshot on every 15 min check regardless of crossings or market hours</span>
+          </label>
+          <div style="display:flex;gap:8px;margin-bottom:14px;">
+            <button class="btn" id="sendTestNowBtn">SEND TEST NOW</button>
+            <span class="saved-flash" id="testSentFlash">✓ Sent</span>
+          </div>
+          <button class="btn" id="unsubBtn">UNSUBSCRIBE</button>
+        </div>
+      </div>
+    </div>
+
     <div class="config-panel" style="margin-bottom:16px;">
       <button class="config-toggle" id="helpToggle">
         <span>HOW TO USE</span>
@@ -507,7 +547,10 @@ const HTML = `<!DOCTYPE html>
       <span><span style="color:var(--orange)">●</span> Weak &lt; 50</span>
       <span><span style="color:var(--neutral)">●</span> Firm ≥ 50</span>
       <span><span style="color:var(--red)">●</span> Sell ≥ 70</span>
-      <span class="auto">Auto-refreshes every 5 min</span>
+      <label class="checkbox-label auto">
+        <input type="checkbox" id="autoRefreshChk" checked>
+        <span>Auto-refresh (5 min)</span>
+      </label>
     </div>
   </div>
 
@@ -770,7 +813,8 @@ const HTML = `<!DOCTYPE html>
 
     function scheduleRefresh() {
       if (refreshInterval) clearInterval(refreshInterval);
-      if (state.stocks.length) {
+      const autoRefreshChk = $("#autoRefreshChk");
+      if (state.stocks.length && autoRefreshChk && autoRefreshChk.checked) {
         refreshInterval = setInterval(fetchData, 5 * 60 * 1000);
       }
     }
@@ -832,6 +876,96 @@ const HTML = `<!DOCTYPE html>
       }, 800);
     });
 
+    // Auto-refresh checkbox
+    $("#autoRefreshChk").addEventListener("change", (e) => {
+      if (e.target.checked) {
+        scheduleRefresh();
+      } else {
+        if (refreshInterval) clearInterval(refreshInterval);
+        refreshInterval = null;
+      }
+    });
+
+    // --- Telegram panel ---
+    const telegramToggle = $("#telegramToggle");
+    const telegramArrow = $("#telegramArrow");
+    const telegramBody = $("#telegramBody");
+    const subInstructions = $("#subInstructions");
+    const subConfirmed = $("#subConfirmed");
+    const subCommandInput = $("#subCommandInput");
+    const copySubBtn = $("#copySubBtn");
+    const checkSubBtn = $("#checkSubBtn");
+    const unsubBtn = $("#unsubBtn");
+    const testModeChk = $("#testModeChk");
+
+    telegramToggle.addEventListener("click", () => {
+      telegramBody.classList.toggle("hidden");
+      telegramArrow.classList.toggle("open");
+    });
+
+    async function checkSubStatus() {
+      const res = await fetch("/sub-status?s=" + sessionId);
+      const data = await res.json();
+      if (data.subscribed) {
+        subInstructions.style.display = "none";
+        subConfirmed.style.display = "block";
+        testModeChk.checked = !!data.testMode;
+      } else {
+        const cmd = "/subscribe " + sessionId;
+        subCommandInput.value = cmd;
+        subInstructions.style.display = "block";
+        subConfirmed.style.display = "none";
+      }
+    }
+
+    testModeChk.addEventListener("change", async (e) => {
+      await fetch("/sub-test-mode?s=" + sessionId, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ testMode: e.target.checked }),
+      });
+    });
+
+    telegramToggle.addEventListener("click", async () => {
+      if (!telegramBody.classList.contains("hidden")) return; // about to open
+      await checkSubStatus();
+    }, { capture: true });
+
+    copySubBtn.addEventListener("click", () => {
+      navigator.clipboard.writeText(subCommandInput.value).then(() => {
+        copySubBtn.textContent = "COPIED!";
+        setTimeout(() => { copySubBtn.textContent = "COPY"; }, 1500);
+      });
+    });
+
+    checkSubBtn.addEventListener("click", async () => {
+      checkSubBtn.textContent = "CHECKING...";
+      await checkSubStatus();
+      checkSubBtn.textContent = "CHECK STATUS";
+    });
+
+    const sendTestNowBtn = $("#sendTestNowBtn");
+    const testSentFlash = $("#testSentFlash");
+    sendTestNowBtn.addEventListener("click", async () => {
+      sendTestNowBtn.textContent = "SENDING...";
+      sendTestNowBtn.disabled = true;
+      const res = await fetch("/test-alert?s=" + sessionId, { method: "POST" });
+      const data = await res.json();
+      sendTestNowBtn.textContent = "SEND TEST NOW";
+      sendTestNowBtn.disabled = false;
+      if (data.ok) {
+        testSentFlash.classList.add("show");
+        setTimeout(() => testSentFlash.classList.remove("show"), 2000);
+      }
+    });
+
+    unsubBtn.addEventListener("click", async () => {
+      unsubBtn.textContent = "UNSUBSCRIBING...";
+      await fetch("/unsubscribe?s=" + sessionId, { method: "POST" });
+      await checkSubStatus();
+      unsubBtn.textContent = "UNSUBSCRIBE";
+    });
+
     // Init: load tickers from server, then auto-fetch
     (async () => {
       await loadTickers();
@@ -846,6 +980,90 @@ const HTML = `<!DOCTYPE html>
   </script>
 </body>
 </html>`;
+
+async function sendTelegram(env, chatId, text, parseMode = null) {
+  const body = { chat_id: chatId, text };
+  if (parseMode) body.parse_mode = parseMode;
+  await fetch(`https://api.telegram.org/bot${env.TELEGRAM_TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
+async function processSubscriber(sub, env) {
+  const { sessionId, chatId } = sub;
+  try {
+    const [t1, t2] = await Promise.all([
+      env.RSI_KV.get(`s:${sessionId}:tickers`),
+      env.RSI_KV.get(`s:${sessionId}:index_tickers`),
+    ]);
+    const tickers = (t1 || "").split(",").map(t => t.trim().toUpperCase()).filter(Boolean);
+    const indexTickers = new Set((t2 || "").split(",").map(t => t.trim().toUpperCase()).filter(Boolean));
+    const allTickers = [...new Set([...tickers, ...indexTickers])];
+    if (allTickers.length === 0) return;
+
+    const results = await Promise.all(allTickers.map(fetchRSI));
+    const currentSnap = {};
+    results.forEach(r => { if (r.rsi !== null) currentSnap[r.ticker] = r.rsi; });
+
+    const prevSnap = JSON.parse((await env.RSI_KV.get(`snap:${sessionId}`)) || "{}");
+    await env.RSI_KV.put(`snap:${sessionId}`, JSON.stringify(currentSnap));
+
+    const buys = [], sells = [];
+    for (const r of results) {
+      if (r.rsi === null) continue;
+      const prev = prevSnap[r.ticker];
+      if (prev === undefined) continue; // no previous data, skip first run
+      const isIndex = indexTickers.has(r.ticker);
+      const buyThreshold = isIndex ? 50 : 30;
+
+      if (r.rsi < buyThreshold && prev >= buyThreshold) {
+        buys.push({ ...r, isIndex });
+      }
+      if (r.rsi >= 70 && prev < 70) {
+        sells.push({ ...r, isIndex });
+      }
+    }
+
+    const dashUrl = `https://rsi-stock-tracker.mishabhi.workers.dev/?s=${sessionId}`;
+
+    if (sub.testMode) {
+      // Test mode: send full snapshot regardless of crossings
+      const lines = ["🧪 <b>TEST MODE — RSI Snapshot</b>"];
+      const order = { oversold: 0, overbought: 1, below_midline: 2, above_midline: 3 };
+      const sorted = results.filter(r => r.rsi !== null).sort((a, b) => (order[a.zone] ?? 9) - (order[b.zone] ?? 9));
+      sorted.forEach(r => {
+        const labels = { oversold: "BUY", overbought: "SELL", below_midline: "WEAK", above_midline: "FIRM" };
+        const tag = indexTickers.has(r.ticker) ? " [I]" : "";
+        lines.push(`• <b>${r.ticker}</b>${tag} — RSI ${r.rsi.toFixed(1)} (${labels[r.zone] || r.zone})`);
+      });
+      lines.push(`\n<a href="${dashUrl}">📊 Open dashboard</a>`);
+      await sendTelegram(env, chatId, lines.join("\n"), "HTML");
+      return;
+    }
+
+    if (buys.length === 0 && sells.length === 0) return;
+
+    const lines = ["🔔 <b>RSI Alert</b>"];
+    if (buys.length) {
+      lines.push("\n📈 <b>BUY signals:</b>");
+      buys.forEach(s => {
+        const tag = s.isIndex ? " (index, &lt;50)" : " (&lt;30)";
+        lines.push(`• <b>${s.ticker}</b> — RSI ${s.rsi.toFixed(1)}${tag}`);
+      });
+    }
+    if (sells.length) {
+      lines.push("\n📉 <b>SELL signals:</b>");
+      sells.forEach(s => lines.push(`• <b>${s.ticker}</b> — RSI ${s.rsi.toFixed(1)} (&gt;70)`));
+    }
+    lines.push(`\n<a href="${dashUrl}">📊 Open dashboard</a>`);
+
+    await sendTelegram(env, chatId, lines.join("\n"), "HTML");
+  } catch (err) {
+    console.error(`Error processing subscriber ${sessionId}:`, err);
+  }
+}
 
 export default {
   async fetch(request, env) {
@@ -948,6 +1166,157 @@ export default {
       );
     }
 
+    // POST /telegram — webhook from Telegram bot
+    if (url.pathname === "/telegram" && request.method === "POST") {
+      const body = await request.json();
+      const msg = body?.message;
+      if (!msg) return new Response("ok");
+
+      const chatId = msg.chat?.id;
+      const text = (msg.text || "").trim();
+
+      if (text.startsWith("/subscribe")) {
+        const parts = text.split(/\s+/);
+        const sid = parts[1] || "";
+        if (!sid) {
+          await sendTelegram(env, chatId, "Please include your session ID:\n<code>/subscribe YOUR_SESSION_ID</code>\n\nFind it in the Configuration panel on your dashboard.", "HTML");
+        } else {
+          // Add to subscribers list
+          const subs = JSON.parse((await env.RSI_KV.get("subscribers")) || "[]");
+          const existing = subs.findIndex(s => s.sessionId === sid);
+          if (existing >= 0) {
+            subs[existing].chatId = chatId;
+          } else {
+            subs.push({ sessionId: sid, chatId });
+          }
+          await env.RSI_KV.put("subscribers", JSON.stringify(subs));
+          const dashUrl = new URL(request.url).origin + "/?s=" + sid;
+          await sendTelegram(env, chatId, `✅ Subscribed!\n\nYou'll receive RSI alerts every 15 min during US market hours (9:30am–4pm ET, Mon–Fri).\n\nAlerts only fire when a ticker <b>crosses</b> a threshold in that window.\n\n📊 <a href="${dashUrl}">Open your dashboard</a>`, "HTML");
+        }
+      } else if (text.startsWith("/unsubscribe")) {
+        const subs = JSON.parse((await env.RSI_KV.get("subscribers")) || "[]");
+        const filtered = subs.filter(s => s.chatId !== chatId);
+        await env.RSI_KV.put("subscribers", JSON.stringify(filtered));
+        await sendTelegram(env, chatId, "✅ Unsubscribed. You won't receive any more alerts.");
+      } else if (text.startsWith("/start") || text.startsWith("/help")) {
+        await sendTelegram(env, chatId, "👋 <b>RSI Alert Bot</b>\n\nCommands:\n• <code>/subscribe SESSION_ID</code> — start alerts for your dashboard\n• <code>/unsubscribe</code> — stop alerts\n\nFind your session ID in the Configuration panel on your dashboard.", "HTML");
+      }
+
+      return new Response("ok");
+    }
+
+    // GET /sub-status?s=SESSION_ID
+    if (url.pathname === "/sub-status" && request.method === "GET") {
+      const sid = url.searchParams.get("s") || "";
+      const subs = JSON.parse((await env.RSI_KV.get("subscribers")) || "[]");
+      const sub = subs.find(s => s.sessionId === sid);
+      return new Response(JSON.stringify({ subscribed: !!sub, testMode: sub?.testMode || false }), {
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
+    }
+
+    // POST /test-alert?s=SESSION_ID — immediately send a test message
+    if (url.pathname === "/test-alert" && request.method === "POST") {
+      const sid = url.searchParams.get("s") || "";
+      const subs = JSON.parse((await env.RSI_KV.get("subscribers")) || "[]");
+      const sub = subs.find(s => s.sessionId === sid);
+      if (!sub) {
+        return new Response(JSON.stringify({ ok: false, error: "Not subscribed" }), {
+          status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        });
+      }
+      await processSubscriber({ ...sub, testMode: true }, env);
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
+    }
+
+    // POST /sub-test-mode?s=SESSION_ID
+    if (url.pathname === "/sub-test-mode" && request.method === "POST") {
+      const sid = url.searchParams.get("s") || "";
+      const body = await request.json();
+      const subs = JSON.parse((await env.RSI_KV.get("subscribers")) || "[]");
+      const idx = subs.findIndex(s => s.sessionId === sid);
+      if (idx >= 0) {
+        subs[idx].testMode = !!body.testMode;
+        await env.RSI_KV.put("subscribers", JSON.stringify(subs));
+      }
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
+    }
+
+    // POST /unsubscribe?s=SESSION_ID — unsubscribe from page
+    if (url.pathname === "/unsubscribe" && request.method === "POST") {
+      const sid = url.searchParams.get("s") || "";
+      const subs = JSON.parse((await env.RSI_KV.get("subscribers")) || "[]");
+      const sub = subs.find(s => s.sessionId === sid);
+      const filtered = subs.filter(s => s.sessionId !== sid);
+      await env.RSI_KV.put("subscribers", JSON.stringify(filtered));
+      if (sub) await sendTelegram(env, sub.chatId, "✅ Unsubscribed via dashboard. You won't receive any more alerts.");
+      return new Response(JSON.stringify({ ok: true }), {
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
+    }
+
+    // Health check
+    if (url.pathname === "/health") {
+      return new Response(JSON.stringify({ status: "ok" }), {
+        headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+      });
+    }
+
+    // GET /rsi?tickers=AAPL,MSFT,...
+    if (url.pathname === "/rsi") {
+      const tickersParam = url.searchParams.get("tickers");
+
+      if (!tickersParam) {
+        return new Response(
+          JSON.stringify({ error: "Missing ?tickers= parameter" }),
+          { status: 400, headers: { ...CORS_HEADERS, "Content-Type": "application/json" } }
+        );
+      }
+
+      const tickers = tickersParam
+        .split(",")
+        .map((t) => t.trim().toUpperCase())
+        .filter((t) => t.length > 0)
+        .slice(0, 30);
+
+      const results = await Promise.all(tickers.map(fetchRSI));
+
+      return new Response(
+        JSON.stringify({
+          updated: new Date().toISOString(),
+          count: results.length,
+          stocks: results,
+        }),
+        {
+          headers: {
+            ...CORS_HEADERS,
+            "Content-Type": "application/json",
+            "Cache-Control": "public, max-age=300",
+          },
+        }
+      );
+    }
+
     return new Response("Not found", { status: 404 });
+  },
+
+  async scheduled(event, env, ctx) {
+    const subs = JSON.parse((await env.RSI_KV.get("subscribers")) || "[]");
+    if (subs.length === 0) return;
+
+    // Market hours check: ET approx UTC 13:00–20:30 (Mon–Fri)
+    const now = new Date();
+    const utcMins = now.getUTCHours() * 60 + now.getUTCMinutes();
+    const inMarketHours = utcMins >= 13 * 60 && utcMins <= 20 * 60 + 30;
+
+    // Run test-mode subscribers regardless of market hours; skip others if outside hours
+    const toProcess = subs.filter(sub => sub.testMode || inMarketHours);
+    if (toProcess.length === 0) return;
+
+    ctx.waitUntil(Promise.all(toProcess.map(sub => processSubscriber(sub, env))));
   },
 };

@@ -8,5 +8,8 @@
       "binding": "RSI_KV",
       "id": "eaa519b387234ce49c0aa2cfb25c7fd0"
     }
-  ]
+  ],
+  "triggers": {
+    "crons": ["*/15 * * * 1-5"]
+  }
 }
