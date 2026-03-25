@@ -99,7 +99,7 @@ const HTML = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>RSI Monitor</title>
+  <title>RSI Tracker</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   <style>
@@ -161,14 +161,13 @@ const HTML = `<!DOCTYPE html>
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 8px;
-      overflow: hidden;
     }
     .config-toggle {
       width: 100%; padding: 12px 20px;
       background: none; border: none; cursor: pointer;
       display: flex; justify-content: space-between; align-items: center;
       font-family: var(--mono); font-size: 11px; color: var(--text-dim);
-      letter-spacing: 1px;
+      letter-spacing: 1px; border-radius: 8px 8px 0 0;
     }
     .config-toggle .arrow { font-size: 14px; transition: transform 0.2s; }
     .config-toggle .arrow.open { transform: rotate(180deg); }
@@ -192,6 +191,23 @@ const HTML = `<!DOCTYPE html>
     }
     .field-input:focus { border-color: rgba(255,255,255,0.25); }
     .field-input::placeholder { color: var(--text-muted); }
+    .field-textarea { resize: none; overflow: hidden; line-height: 1.6; }
+    .search-dropdown {
+      position: absolute; top: 100%; left: 0; right: 0; z-index: 100;
+      background: #1e293b; border: 1px solid var(--border-light);
+      border-radius: 0 0 6px 6px; overflow: hidden;
+    }
+    .search-result {
+      display: flex; align-items: center; gap: 10px;
+      padding: 9px 14px; border-bottom: 1px solid rgba(255,255,255,0.04);
+      cursor: default;
+    }
+    .search-result:last-child { border-bottom: none; }
+    .search-result:hover { background: rgba(255,255,255,0.05); }
+    .search-symbol { font-family: var(--mono); font-weight: 700; font-size: 13px; min-width: 100px; }
+    .search-name { font-size: 12px; color: var(--text-dim); flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .search-add-btn { font-family: var(--mono); font-size: 10px; padding: 3px 7px; border-radius: 3px; border: 1px solid var(--border-light); background: none; color: var(--text-dim); cursor: pointer; white-space: nowrap; }
+    .search-add-btn:hover { border-color: var(--text-dim); color: var(--text); }
 
     .btn {
       align-self: flex-start;
@@ -382,7 +398,7 @@ const HTML = `<!DOCTYPE html>
 <body>
   <div class="container" id="app">
     <div class="header">
-      <h1>RSI MONITOR</h1>
+      <h1>RSI TRACKER</h1>
       <span class="badge">RSI(14) · DAILY</span>
     </div>
     <div class="status-bar" id="statusBar"></div>
@@ -392,16 +408,21 @@ const HTML = `<!DOCTYPE html>
         <span>CONFIGURATION</span>
         <span class="arrow open" id="configArrow">▾</span>
       </button>
-      <div class="config-body" id="configBody">
+      <div class="config-body hidden" id="configBody">
+        <div style="position:relative;">
+          <label class="field-label">SEARCH — find ticker by company name</label>
+          <input class="field-input" id="searchInput" type="text" placeholder="e.g. Apple, Reliance, HDFC" autocomplete="off">
+          <div id="searchDropdown" class="search-dropdown" style="display:none;"></div>
+        </div>
         <div>
           <label class="field-label">TICKERS — alert below 30 or above 70</label>
-          <input class="field-input" id="tickersInput" type="text"
-            placeholder="AAPL,MSFT,GOOGL,TSLA">
+          <textarea class="field-input field-textarea" id="tickersInput"
+            placeholder="AAPL,MSFT,GOOGL,TSLA" rows="3"></textarea>
         </div>
         <div>
           <label class="field-label">INDEX TICKERS — also alert below 50</label>
-          <input class="field-input" id="indexTickersInput" type="text"
-            placeholder="BHP,CBA,WBC">
+          <textarea class="field-input field-textarea" id="indexTickersInput"
+            placeholder="BHP,CBA,WBC" rows="3"></textarea>
         </div>
         <div>
           <label class="field-label">YOUR SESSION URL — bookmark or share to restore on any device</label>
@@ -411,13 +432,13 @@ const HTML = `<!DOCTYPE html>
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:12px;">
-          <button class="btn" id="fetchBtn">FETCH RSI DATA</button>
+          <button class="btn" id="fetchBtn">UPDATE LIST</button>
           <span class="saved-flash" id="savedFlash">✓ Saved</span>
         </div>
       </div>
     </div>
 
-    <div class="config-panel" style="margin-bottom:16px;" id="telegramPanel">
+    <div class="config-panel" id="telegramPanel">
       <button class="config-toggle" id="telegramToggle">
         <span>TELEGRAM ALERTS</span>
         <span class="arrow" id="telegramArrow">▾</span>
@@ -436,10 +457,10 @@ const HTML = `<!DOCTYPE html>
           </div>
         </div>
         <div id="subConfirmed" style="display:none;">
-          <p class="hint" style="margin-bottom:14px;color:var(--green);">✓ Subscribed — alerts fire every 15 min during US market hours when a ticker crosses its threshold.</p>
+          <p class="hint" style="margin-bottom:14px;color:var(--green);">✓ Subscribed — you'll receive alerts when a ticker enters BUY or SELL territory.</p>
           <label class="checkbox-label" style="margin-bottom:14px;">
             <input type="checkbox" id="testModeChk">
-            <span>Test mode — send a snapshot on every 15 min check regardless of crossings or market hours</span>
+            <span>Test mode — send a full RSI snapshot on every check regardless of crossings</span>
           </label>
           <div style="display:flex;gap:8px;margin-bottom:14px;">
             <button class="btn" id="sendTestNowBtn">SEND TEST NOW</button>
@@ -450,7 +471,7 @@ const HTML = `<!DOCTYPE html>
       </div>
     </div>
 
-    <div class="config-panel" style="margin-bottom:16px;">
+    <div class="config-panel">
       <button class="config-toggle" id="helpToggle">
         <span>HOW TO USE</span>
         <span class="arrow" id="helpArrow">▾</span>
@@ -580,6 +601,13 @@ const HTML = `<!DOCTYPE html>
       error: null,
     };
     let refreshInterval = null;
+    const REFRESH_MS = 5 * 60 * 1000;
+    let hiddenAt = null;
+
+    function autoResize(el) {
+      el.style.height = "auto";
+      el.style.height = el.scrollHeight + "px";
+    }
 
     function currencySymbol(c) {
       if (c === "INR") return "₹";
@@ -690,12 +718,14 @@ const HTML = `<!DOCTYPE html>
     function render() {
       tickersInput.value = state.tickers;
       indexTickersInput.value = state.indexTickers;
+      autoResize(tickersInput);
+      autoResize(indexTickersInput);
       sessionUrlInput.value = sessionUrl;
       configBody.classList.toggle("hidden", !state.configOpen);
       configArrow.classList.toggle("open", state.configOpen);
 
       fetchBtn.disabled = state.loading;
-      fetchBtn.textContent = state.loading ? "FETCHING..." : "FETCH RSI DATA";
+      fetchBtn.textContent = state.loading ? "FETCHING..." : "UPDATE LIST";
 
       if (state.error) {
         errorBox.style.display = "block";
@@ -826,9 +856,29 @@ const HTML = `<!DOCTYPE html>
       if (refreshInterval) clearInterval(refreshInterval);
       const autoRefreshChk = $("#autoRefreshChk");
       if (state.stocks.length && autoRefreshChk && autoRefreshChk.checked) {
-        refreshInterval = setInterval(fetchData, 5 * 60 * 1000);
+        refreshInterval = setInterval(fetchData, REFRESH_MS);
       }
     }
+
+    document.addEventListener("visibilitychange", () => {
+      const autoRefreshChk = $("#autoRefreshChk");
+      if (!autoRefreshChk?.checked || !state.stocks.length) return;
+      if (document.visibilityState === "hidden") {
+        hiddenAt = Date.now();
+        if (refreshInterval) { clearInterval(refreshInterval); refreshInterval = null; }
+      } else {
+        const elapsed = hiddenAt ? Date.now() - hiddenAt : 0;
+        hiddenAt = null;
+        if (elapsed >= REFRESH_MS) {
+          fetchData();
+        } else {
+          refreshInterval = setTimeout(() => {
+            fetchData();
+            refreshInterval = setInterval(fetchData, REFRESH_MS);
+          }, REFRESH_MS - elapsed);
+        }
+      }
+    });
 
     const helpToggle = $("#helpToggle");
     const helpBody = $("#helpBody");
@@ -845,9 +895,79 @@ const HTML = `<!DOCTYPE html>
       });
     });
 
+    // --- Ticker search ---
+    const searchInput = $("#searchInput");
+    const searchDropdown = $("#searchDropdown");
+
+    function addTickerToList(symbol, listType) {
+      if (listType === "index") {
+        const cur = state.indexTickers ? state.indexTickers.split(",").map(t => t.trim()).filter(Boolean) : [];
+        if (!cur.includes(symbol)) {
+          state.indexTickers = [...cur, symbol].join(",");
+          indexTickersInput.value = state.indexTickers;
+          autoResize(indexTickersInput);
+          saveIndexTickers(state.indexTickers);
+        }
+      } else {
+        const cur = state.tickers ? state.tickers.split(",").map(t => t.trim()).filter(Boolean) : [];
+        if (!cur.includes(symbol)) {
+          state.tickers = [...cur, symbol].join(",");
+          tickersInput.value = state.tickers;
+          autoResize(tickersInput);
+          saveTickers(state.tickers);
+        }
+      }
+      searchInput.value = "";
+      searchDropdown.style.display = "none";
+      fetchData();
+    }
+
+    function renderSearchResults(results) {
+      if (!results.length) { searchDropdown.style.display = "none"; return; }
+      searchDropdown.innerHTML = results.map(r =>
+        '<div class="search-result">' +
+        '<span class="search-symbol">' + r.symbol + '</span>' +
+        '<span class="search-name">' + r.name + '</span>' +
+        '<button class="search-add-btn" data-symbol="' + r.symbol + '" data-list="tickers">+ TICKERS</button>' +
+        '<button class="search-add-btn" data-symbol="' + r.symbol + '" data-list="index">+ INDEX</button>' +
+        '</div>'
+      ).join("");
+      searchDropdown.style.display = "block";
+      searchDropdown.querySelectorAll(".search-add-btn").forEach(btn => {
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          addTickerToList(btn.dataset.symbol, btn.dataset.list);
+        });
+      });
+    }
+
+    let searchTimeout;
+    searchInput.addEventListener("input", () => {
+      clearTimeout(searchTimeout);
+      const q = searchInput.value.trim();
+      if (!q) { searchDropdown.style.display = "none"; return; }
+      searchTimeout = setTimeout(async () => {
+        try {
+          const res = await fetch("/search?q=" + encodeURIComponent(q));
+          const data = await res.json();
+          renderSearchResults(data.results || []);
+        } catch (e) { searchDropdown.style.display = "none"; }
+      }, 300);
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!searchInput.contains(e.target) && !searchDropdown.contains(e.target)) {
+        searchDropdown.style.display = "none";
+      }
+    });
+
     configToggle.addEventListener("click", () => {
       state.configOpen = !state.configOpen;
       render();
+      if (state.configOpen) {
+        autoResize(tickersInput);
+        autoResize(indexTickersInput);
+      }
     });
 
     allToggle.addEventListener("click", () => {
@@ -871,6 +991,7 @@ const HTML = `<!DOCTYPE html>
 
     let saveTimeout;
     tickersInput.addEventListener("input", () => {
+      autoResize(tickersInput);
       clearTimeout(saveTimeout);
       saveTimeout = setTimeout(async () => {
         state.tickers = tickersInput.value.trim();
@@ -880,6 +1001,7 @@ const HTML = `<!DOCTYPE html>
 
     let indexSaveTimeout;
     indexTickersInput.addEventListener("input", () => {
+      autoResize(indexTickersInput);
       clearTimeout(indexSaveTimeout);
       indexSaveTimeout = setTimeout(async () => {
         state.indexTickers = indexTickersInput.value.trim();
@@ -980,12 +1102,14 @@ const HTML = `<!DOCTYPE html>
     // Init: load tickers from server, then auto-fetch
     (async () => {
       await loadTickers();
+      if (!state.tickers) {
+        state.configOpen = true; // new user — open config so they can add tickers
+        emptyState.textContent = "Add tickers above and click FETCH to get started.";
+        emptyState.style.display = "block";
+      }
       render();
       if (state.tickers) {
         fetchData();
-      } else {
-        emptyState.textContent = "Add tickers above and click FETCH to get started.";
-        emptyState.style.display = "block";
       }
     })();
   </script>
@@ -1143,6 +1267,33 @@ export default {
       });
     }
 
+    // GET /search?q=QUERY
+    if (url.pathname === "/search" && request.method === "GET") {
+      const q = url.searchParams.get("q") || "";
+      if (!q.trim()) {
+        return new Response(JSON.stringify({ results: [] }), {
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        });
+      }
+      try {
+        const resp = await fetch(
+          `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=8&newsCount=0`,
+          { headers: { "User-Agent": "Mozilla/5.0 (compatible; RSI-Tracker/1.0)" } }
+        );
+        const data = await resp.json();
+        const results = (data?.quotes || [])
+          .filter(r => r.symbol && r.quoteType === "EQUITY")
+          .map(r => ({ symbol: r.symbol, name: r.shortname || r.longname || "" }));
+        return new Response(JSON.stringify({ results }), {
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        });
+      } catch (err) {
+        return new Response(JSON.stringify({ results: [] }), {
+          headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // GET /rsi?tickers=AAPL,MSFT,...
     if (url.pathname === "/rsi") {
       const tickersParam = url.searchParams.get("tickers");
@@ -1203,7 +1354,7 @@ export default {
           }
           await env.RSI_KV.put("subscribers", JSON.stringify(subs));
           const dashUrl = new URL(request.url).origin + "/?s=" + sid;
-          await sendTelegram(env, chatId, `✅ Subscribed!\n\nYou'll receive RSI alerts every 15 min during US market hours (9:30am–4pm ET, Mon–Fri).\n\nAlerts only fire when a ticker <b>crosses</b> a threshold in that window.\n\n📊 <a href="${dashUrl}">Open your dashboard</a>`, "HTML");
+          await sendTelegram(env, chatId, `✅ Subscribed!\n\nYou'll receive alerts when a ticker enters <b>BUY</b> or <b>SELL</b> territory.\n\n📊 <a href="${dashUrl}">Open your dashboard</a>`, "HTML");
         }
       } else if (text.startsWith("/unsubscribe")) {
         const subs = JSON.parse((await env.RSI_KV.get("subscribers")) || "[]");
