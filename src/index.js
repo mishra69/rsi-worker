@@ -208,6 +208,10 @@ const HTML = `<!DOCTYPE html>
     .search-name { font-size: 12px; color: var(--text-dim); flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
     .search-add-btn { font-family: var(--mono); font-size: 10px; padding: 3px 7px; border-radius: 3px; border: 1px solid var(--border-light); background: none; color: var(--text-dim); cursor: pointer; white-space: nowrap; }
     .search-add-btn:hover { border-color: var(--text-dim); color: var(--text); }
+    .btn-danger { border-color: var(--red); color: var(--red); }
+    .btn-danger:hover { background: rgba(255,82,82,0.1); }
+    .col-ticker input[type=checkbox] { width: 14px; height: 14px; cursor: pointer; accent-color: var(--red); flex-shrink: 0; }
+    .table-row.edit-selected { background: rgba(255,82,82,0.06); }
 
     .btn {
       align-self: flex-start;
@@ -390,7 +394,7 @@ const HTML = `<!DOCTYPE html>
       .table-header-all, .table-row-all {
         grid-template-columns: 90px 64px 48px 1fr 52px 52px !important;
       }
-      .col-ticker { font-size: 12px; }
+.col-ticker { font-size: 12px; }
       .col-rsi { font-size: 16px; }
     }
   </style>
@@ -515,6 +519,12 @@ const HTML = `<!DOCTYPE html>
 
     <div class="error-box" id="errorBox" style="display:none;"></div>
 
+    <div id="editToolbar" style="display:none; margin-bottom:10px; display:none; align-items:center; gap:10px;">
+      <button class="btn" id="modifyListBtn">MODIFY LIST</button>
+      <button class="btn btn-danger" id="deleteSelectedBtn" style="display:none;">DELETE SELECTED</button>
+      <button class="btn" id="doneEditBtn" style="display:none;">DONE</button>
+    </div>
+
     <div id="buySection" style="display:none;">
       <div class="section-header buy">
         <span class="section-title">BUY</span>
@@ -599,6 +609,8 @@ const HTML = `<!DOCTYPE html>
       allSort: null, // null = zone order, 'asc' = RSI low→high, 'desc' = RSI high→low
       loading: false,
       error: null,
+      editMode: false,
+      selected: new Set(),
     };
     let refreshInterval = null;
     const REFRESH_MS = 5 * 60 * 1000;
@@ -693,15 +705,19 @@ const HTML = `<!DOCTYPE html>
       return (ZONE_META[zone] || ZONE_META.no_data).color;
     }
 
-    function renderRows(stocks, indexSet) {
+    function renderRows(stocks, indexSet, isAllTable) {
       return stocks.map((s, i) => {
         const color = zoneColor(s.zone);
         const isIndex = indexSet && indexSet.has(s.ticker);
         const chgClass = s.changePercent > 0 ? "up" : s.changePercent < 0 ? "down" : "flat";
         const chgStr = s.changePercent != null ? (s.changePercent > 0 ? "+" : "") + s.changePercent + "%" : "";
         const rsiPct = s.rsi != null ? Math.min(100, Math.max(0, s.rsi)) : 0;
-        return '<div class="table-row" style="animation-delay:' + (i * 40) + 'ms">' +
-          '<span class="col-ticker"><span class="ticker-text">' + s.ticker + '</span>' + (isIndex ? '<span class="index-tag">I</span>' : '') + '</span>' +
+        const selectedClass = state.selected.has(s.ticker) ? " edit-selected" : "";
+        const checkBox = state.editMode
+          ? '<input type="checkbox" data-ticker="' + s.ticker + '"' + (state.selected.has(s.ticker) ? " checked" : "") + '>'
+          : "";
+        return '<div class="table-row' + (isAllTable ? " table-row-all" : "") + selectedClass + '" style="animation-delay:' + (i * 40) + 'ms">' +
+          '<span class="col-ticker">' + checkBox + '<span class="ticker-text">' + s.ticker + '</span>' + (isIndex ? '<span class="index-tag">I</span>' : '') + '</span>' +
           '<span class="col-price">' + (s.price != null ? currencySymbol(s.currency) + s.price.toLocaleString() : "—") + '</span>' +
           '<span class="col-change ' + chgClass + '">' + chgStr + '</span>' +
           '<div class="rsi-bar">' +
@@ -711,6 +727,7 @@ const HTML = `<!DOCTYPE html>
             '<div class="fill" style="width:' + rsiPct + '%;background:' + color + '"></div>' +
           '</div>' +
           '<span class="col-rsi" style="color:' + color + '">' + (s.rsi != null ? s.rsi.toFixed(1) : "—") + '</span>' +
+          (isAllTable ? '<span class="col-signal" style="color:' + color + '">' + (ZONE_META[s.zone] || ZONE_META.no_data).label + '</span>' : '') +
         '</div>';
       }).join("");
     }
@@ -755,16 +772,35 @@ const HTML = `<!DOCTYPE html>
 
       const hasSignals = buys.length || sells.length;
 
+      // Edit toolbar visibility
+      const editToolbar = $("#editToolbar");
+      const deleteSelectedBtn = $("#deleteSelectedBtn");
+      const doneEditBtn = $("#doneEditBtn");
+      if (state.stocks.length) {
+        editToolbar.style.display = "flex";
+        deleteSelectedBtn.style.display = state.editMode && state.selected.size > 0 ? "inline-flex" : "none";
+        doneEditBtn.style.display = state.editMode ? "inline-flex" : "none";
+        $("#modifyListBtn").textContent = state.editMode ? "CANCEL" : "MODIFY LIST";
+      } else {
+        editToolbar.style.display = "none";
+      }
+
+      const checkHdrCol = "";
+
       if (buys.length) {
         buySection.style.display = "block";
-        buyBody.innerHTML = renderRows(buys, indexSet);
+        $("#buyBody").previousElementSibling.innerHTML = checkHdrCol + '<span>Ticker</span><span>Price</span><span>Chg</span><span>RSI Bar</span><span style="text-align:right">RSI</span>';
+        $("#buyBody").previousElementSibling.className = "table-header";
+        buyBody.innerHTML = renderRows(buys, indexSet, false);
       } else {
         buySection.style.display = "none";
       }
 
       if (sells.length) {
         sellSection.style.display = "block";
-        sellBody.innerHTML = renderRows(sells, indexSet);
+        $("#sellBody").previousElementSibling.innerHTML = checkHdrCol + '<span>Ticker</span><span>Price</span><span>Chg</span><span>RSI Bar</span><span style="text-align:right">RSI</span>';
+        $("#sellBody").previousElementSibling.className = "table-header";
+        sellBody.innerHTML = renderRows(sells, indexSet, false);
       } else {
         sellSection.style.display = "none";
       }
@@ -775,7 +811,10 @@ const HTML = `<!DOCTYPE html>
         allArrow.classList.toggle("open", state.allOpen);
         allSub.textContent = state.stocks.length + " tickers";
 
-        // Sort
+        const allHdr = $("#allRows").previousElementSibling;
+        allHdr.innerHTML = checkHdrCol + '<span>Ticker</span><span>Price</span><span>Chg</span><span>RSI Bar</span><span style="text-align:right">RSI</span><span style="text-align:center">Signal</span>';
+        allHdr.className = "table-header table-header-all";
+
         let sorted;
         if (state.allSort === "asc") {
           sorted = [...state.stocks].sort((a, b) => (a.rsi ?? 999) - (b.rsi ?? 999));
@@ -788,27 +827,7 @@ const HTML = `<!DOCTYPE html>
           sorted = [...state.stocks].sort((a, b) => (order[a.zone] ?? 9) - (order[b.zone] ?? 9));
           rsiSortArrow.textContent = "↕";
         }
-
-        allRows.innerHTML = sorted.map((s, i) => {
-          const zm = ZONE_META[s.zone] || ZONE_META.no_data;
-          const isIndex = indexSet.has(s.ticker);
-          const chgClass = s.changePercent > 0 ? "up" : s.changePercent < 0 ? "down" : "flat";
-          const chgStr = s.changePercent != null ? (s.changePercent > 0 ? "+" : "") + s.changePercent + "%" : "";
-          const rsiPct = s.rsi != null ? Math.min(100, Math.max(0, s.rsi)) : 0;
-          return '<div class="table-row table-row-all" style="animation-delay:' + (i * 30) + 'ms">' +
-            '<span class="col-ticker"><span class="ticker-text">' + s.ticker + '</span>' + (isIndex ? '<span class="index-tag">I</span>' : '') + '</span>' +
-            '<span class="col-price">' + (s.price != null ? currencySymbol(s.currency) + s.price.toLocaleString() : "—") + '</span>' +
-            '<span class="col-change ' + chgClass + '">' + chgStr + '</span>' +
-            '<div class="rsi-bar">' +
-              '<div class="marker" style="left:30%"></div>' +
-              '<div class="marker" style="left:50%"></div>' +
-              '<div class="marker" style="left:70%"></div>' +
-              '<div class="fill" style="width:' + rsiPct + '%;background:' + zm.color + '"></div>' +
-            '</div>' +
-            '<span class="col-rsi" style="color:' + zm.color + '">' + (s.rsi != null ? s.rsi.toFixed(1) : "—") + '</span>' +
-            '<span class="col-signal" style="color:' + zm.color + '">' + zm.label + '</span>' +
-          '</div>';
-        }).join("");
+        allRows.innerHTML = renderRows(sorted, indexSet, true);
       } else {
         allSection.style.display = "none";
       }
@@ -959,6 +978,47 @@ const HTML = `<!DOCTYPE html>
       if (!searchInput.contains(e.target) && !searchDropdown.contains(e.target)) {
         searchDropdown.style.display = "none";
       }
+    });
+
+    // Edit mode handlers
+    $("#modifyListBtn").addEventListener("click", () => {
+      state.editMode = !state.editMode;
+      state.selected = new Set();
+      render();
+    });
+
+    $("#doneEditBtn").addEventListener("click", () => {
+      state.editMode = false;
+      state.selected = new Set();
+      render();
+    });
+
+    $("#deleteSelectedBtn").addEventListener("click", async () => {
+      const toDelete = state.selected;
+      const newTickers = state.tickers.split(",").map(t => t.trim().toUpperCase()).filter(t => t && !toDelete.has(t)).join(",");
+      const newIndex = state.indexTickers.split(",").map(t => t.trim().toUpperCase()).filter(t => t && !toDelete.has(t)).join(",");
+      state.tickers = newTickers;
+      state.indexTickers = newIndex;
+      state.editMode = false;
+      state.selected = new Set();
+      await Promise.all([saveTickers(state.tickers), saveIndexTickers(state.indexTickers)]);
+      fetchData();
+    });
+
+    // Checkbox delegation — all three table bodies
+    ["buyBody", "sellBody", "allRows"].forEach(id => {
+      $("#" + id).addEventListener("change", (e) => {
+        if (e.target.type !== "checkbox") return;
+        const ticker = e.target.dataset.ticker;
+        if (e.target.checked) state.selected.add(ticker);
+        else state.selected.delete(ticker);
+        // Sync the same ticker's checkbox in other tables without full re-render
+        document.querySelectorAll('input[type=checkbox][data-ticker="' + ticker + '"]').forEach(cb => {
+          cb.checked = state.selected.has(ticker);
+          cb.closest(".table-row").classList.toggle("edit-selected", state.selected.has(ticker));
+        });
+        $("#deleteSelectedBtn").style.display = state.selected.size > 0 ? "inline-flex" : "none";
+      });
     });
 
     configToggle.addEventListener("click", () => {
