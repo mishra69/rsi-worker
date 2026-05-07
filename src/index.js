@@ -510,7 +510,7 @@ const HTML = `<!DOCTYPE html>
             <div class="help-title">Data &amp; refresh</div>
             <div class="help-text">
               Price data comes from Yahoo Finance (unofficial API, free). The page auto-refreshes every 5 minutes while open — closing the tab stops it.<br><br>
-              Data may be delayed during market hours and stale on weekends. Up to 30 tickers recommended before you risk hitting rate limits.
+              Data may be delayed during market hours and stale on weekends. Each ticker is fetched independently — if Yahoo Finance rate-limits a request, that ticker will show an error state rather than blocking the others.
             </div>
           </div>
         </div>
@@ -606,7 +606,7 @@ const HTML = `<!DOCTYPE html>
       lastUpdated: null,
       configOpen: true,
       allOpen: true,
-      allSort: null, // null = zone order, 'asc' = RSI low→high, 'desc' = RSI high→low
+      allSort: localStorage.getItem("allSort") || null, // null = zone order, 'asc' = RSI low→high, 'desc' = RSI high→low
       loading: false,
       error: null,
       editMode: false,
@@ -1038,6 +1038,8 @@ const HTML = `<!DOCTYPE html>
     rsiSortBtn.addEventListener("click", (e) => {
       e.stopPropagation();
       state.allSort = state.allSort === "asc" ? "desc" : state.allSort === "desc" ? null : "asc";
+      if (state.allSort) localStorage.setItem("allSort", state.allSort);
+      else localStorage.removeItem("allSort");
       render();
     });
 
@@ -1368,8 +1370,7 @@ export default {
       const tickers = tickersParam
         .split(",")
         .map((t) => t.trim().toUpperCase())
-        .filter((t) => t.length > 0)
-        .slice(0, 30);
+        .filter((t) => t.length > 0);
 
       const results = await Promise.all(tickers.map(fetchRSI));
 
@@ -1503,8 +1504,7 @@ export default {
       const tickers = tickersParam
         .split(",")
         .map((t) => t.trim().toUpperCase())
-        .filter((t) => t.length > 0)
-        .slice(0, 30);
+        .filter((t) => t.length > 0);
 
       const results = await Promise.all(tickers.map(fetchRSI));
 
