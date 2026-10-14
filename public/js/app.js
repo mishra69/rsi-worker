@@ -695,6 +695,10 @@ function signinMessage(text, isError) {
 async function showSignIn() {
   $("#app").hidden = true;
   $("#signinScreen").hidden = false;
+  if (new URLSearchParams(location.search).get("signin") === "failed") {
+    history.replaceState(null, "", "/");
+    signinMessage("Sign-in failed — please try again.", true);
+  }
   try {
     const cfg = await api("/api/config", { auth: false });
     if (!cfg.google_client_id) {
@@ -702,20 +706,14 @@ async function showSignIn() {
       return;
     }
     await loadGoogleScript();
+    // Redirect mode, not popup: an iOS home-screen app has no popups, and the
+    // popup flow dead-ends on a Google 404 there. Google POSTs the credential to
+    // login_uri, which stores the session and sends the app back to "/".
+    // login_uri must be listed under the OAuth client's Authorized redirect URIs.
     google.accounts.id.initialize({
       client_id: cfg.google_client_id,
-      callback: async ({ credential }) => {
-        signinMessage("Signing in…");
-        try {
-          const r = await api("/api/auth/google", { method: "POST", body: { id_token: credential }, auth: false });
-          localStorage.setItem(TOKEN_KEY, r.token);
-          localStorage.setItem(PROFILE_KEY, JSON.stringify(r.user));
-          signinMessage("");
-          showApp();
-        } catch (e) {
-          signinMessage("Sign-in failed.", true);
-        }
-      },
+      ux_mode: "redirect",
+      login_uri: location.origin + "/api/auth/google/redirect",
     });
     google.accounts.id.renderButton($("#googleBtn"), {
       theme: "filled_black", size: "large", shape: "pill", text: "continue_with",

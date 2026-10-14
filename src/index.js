@@ -81,6 +81,13 @@ async function route(request, env, url) {
     }
   }
 
+  // Redirect-mode sign-in. Popup mode can't work in an iOS home-screen app (there
+  // are no popups; Google ends on its own 404), so the page navigates to Google
+  // and Google POSTs the ID token back here as a form.
+  if (path === "/api/auth/google/redirect" && method === "POST") {
+    return redirectSignIn(request, env);
+  }
+
   // ── Authenticated ───────────────────────────────────────────────────────────
 
   const userId = await userFromRequest(request, env);
@@ -199,6 +206,46 @@ async function route(request, env, url) {
   }
 
   return json({ error: "not found" }, 404);
+}
+
+async function redirectSignIn(request, env) {
+  const fail = () => new Response(null, { status: 303, headers: { Location: "/?signin=failed" } });
+  const form = await request.formData().catch(() => null);
+  if (!form) return fail();
+
+  // Double-submit CSRF check: GIS sets the g_csrf_token cookie and posts the
+  // same value in the body. A forged cross-site form can't read our cookie.
+  const cookie = (request.headers.get("Cookie") || "").split(";").map(c => c.trim())
+    .find(c => c.startsWith("g_csrf_token="))?.slice("g_csrf_token=".length);
+  const field = form.get("g_csrf_token");
+  if (!cookie || !field || cookie !== field) {
+    console.warn("sign-in rejected: csrf mismatch");
+    return fail();
+  }
+
+  let result;
+  try {
+    result = await signInWithGoogle(String(form.get("credential") || ""), env);
+    await upsertUser(env, result.user);
+  } catch (err) {
+    console.warn("sign-in rejected:", err.message);
+    return fail();
+  }
+
+  // Hand the session to the page through storage, not the URL, so the token
+  // never lands in history. This page renders inside the installed app's own
+  // web view, so it writes the same localStorage the app reads.
+  const data = JSON.stringify({ token: result.token, user: result.user }).replace(/</g, "\\u003c");
+  const html = `<!DOCTYPE html><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<body style="background:#0a0e17"><script>
+const d = ${data};
+localStorage.setItem("rsi.token", d.token);
+localStorage.setItem("rsi.profile", JSON.stringify(d.user));
+location.replace("/");
+</script></body>`;
+  return new Response(html, {
+    headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" },
+  });
 }
 
 async function telegramWebhook(request, env) {
