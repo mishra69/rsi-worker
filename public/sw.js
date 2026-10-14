@@ -2,7 +2,7 @@
 //
 // deploy.sh stamps VERSION, which changes this file's bytes — that's what makes a
 // new worker install, and it names the cache so every deploy busts it.
-const VERSION = 'dev';
+const VERSION = '20261014_1218';
 const CACHE = 'rsi-' + VERSION;
 
 // Same suffix the HTML carries, so the precached URL and the requested one match.
