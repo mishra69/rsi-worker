@@ -2,7 +2,29 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "rsi-stock-tracker",
   "main": "src/index.js",
-  "compatibility_date": "2024-12-01",
+  "compatibility_date": "2026-05-01",
+  // One Worker serves the PWA shell and /api/*. Assets match first; anything
+  // else falls through to the Worker.
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS"
+  },
+  "vars": {
+    // Public by definition — it ships to every browser. The ID-token flow needs no
+    // client secret. Authorized JavaScript origins must include this app's URL
+    // (and http://localhost:8787 for wrangler dev).
+    "GOOGLE_CLIENT_ID": "813352122858-l3cj54mr85en19nuks07t8nt8s5lv759.apps.googleusercontent.com",
+    // Public half of the VAPID pair from `npx webpush-edge-vapid`. Rotating it
+    // invalidates every subscription; devices must re-subscribe.
+    "VAPID_PUBLIC_KEY": "BBqmeyraO5mT2zl9yAfyw9Pk4q0wqEeR0t3nGyyaYQrCJglR5a583mW8pQmJD2xSmezXLLNpxIRdjPldq1l6Okk",
+    "PUSH_CONTACT": "mailto:mishabhi@gmail.com",
+    "APP_URL": "https://rsi-stock-tracker.mishabhi.workers.dev",
+    "TELEGRAM_BOT": "abhi_284_rsi_alert_bot"
+    // Secrets (npx wrangler secret put NAME):
+    //   TOKEN_SECRET       HMAC key for session tokens
+    //   VAPID_PRIVATE_JWK  private half of the VAPID key
+    //   TELEGRAM_TOKEN     bot token (fallback channel)
+  },
   "kv_namespaces": [
     {
       "binding": "RSI_KV",

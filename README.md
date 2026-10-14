@@ -1,6 +1,7 @@
 # RSI Stock Tracker
 
-A serverless RSI(14) momentum dashboard with Telegram alerts, built entirely on Cloudflare Workers.
+An installable RSI(14) momentum dashboard with push-notification alerts, served
+from a single Cloudflare Worker. Built with the `pwa-cloudflare` skill.
 
 ---
 
@@ -8,9 +9,10 @@ A serverless RSI(14) momentum dashboard with Telegram alerts, built entirely on 
 
 ### Getting started
 
-1. Visit the app URL and a session is automatically created for you (`?s=` in the URL)
-2. Bookmark or copy your session URL — this is how you restore your list on any device or share it
-3. Open **Configuration** and add your tickers
+1. Open the app and **sign in with Google** — your lists are tied to your account and follow you to any device
+2. Open **Configuration** and add your tickers
+3. **Install it**: on iPhone/iPad tap Share → Add to Home Screen; on desktop Chrome use the install prompt
+4. Open **Alerts** → **Turn on notifications** (on iPhone this only works from the Home Screen app)
 
 ### Ticker lists
 
@@ -22,22 +24,18 @@ A serverless RSI(14) momentum dashboard with Telegram alerts, built entirely on 
 - **BUY** when RSI < 50 (these move gradually, 30 is too late)
 - **SELL** when RSI ≥ 70
 
-### Dashboard
+### Alerts
 
-- **BUY / SELL** tables show only actionable signals. Index tickers are tagged with `I`.
-- **ALL** table shows every ticker's current RSI — collapsible, sortable by RSI value.
-- **Auto-refresh** checkbox (bottom of page) — enabled by default, refreshes every 5 min while the tab is open.
+Checked every 15 min. A notification fires when a ticker **crosses** a threshold while its market is in regular session (works for any exchange — US, NSE, ...). Every device you turn notifications on for gets the alert.
 
-### Telegram alerts
+- **Test mode** — sends a full RSI snapshot every 15 min regardless of crossings
+- **Send snapshot now** — one immediate snapshot to every channel
+- **Tap the build stamp** at the bottom — sends a test push and shows the push service's raw status (201 ok, 403 VAPID mismatch, 410 subscription gone)
+- **Telegram (fallback)** — tap *Get link code* and send `/subscribe CODE` to the bot; Telegram then gets the same alerts
 
-1. Open **Telegram Alerts** panel on the dashboard
-2. Copy the `/subscribe ...` command shown and send it to the bot
-3. Click **Check Status** to confirm subscription
-4. Alerts fire every 15 min during US market hours (Mon–Fri, 9:30am–4pm ET) when a ticker **crosses** a threshold in that window
+### Offline
 
-**Test mode** — tick the checkbox to receive a full RSI snapshot on every 15 min cron run, regardless of crossings or market hours. Use **Send Test Now** to trigger an immediate message without waiting for the cron.
-
-To unsubscribe, click the button on the dashboard or send `/unsubscribe` to the bot.
+The app opens offline and shows the last RSI table it fetched. Sign-in needs a connection.
 
 ---
 
@@ -47,93 +45,64 @@ To unsubscribe, click the button on the dashboard or send `/unsubscribe` to the 
 
 | Layer | Technology |
 |---|---|
-| Runtime | Cloudflare Workers (V8 isolates, edge) |
-| Scheduled jobs | Cloudflare Cron Triggers |
-| Storage | Cloudflare KV (key-value) |
+| Runtime | One Cloudflare Worker — static assets (`public/`) + `/api/*` |
+| Scheduled jobs | Cron Trigger, every 15 min |
+| Storage | Workers KV |
 | Data source | Yahoo Finance chart API (unofficial, free) |
-| Notifications | Telegram Bot API |
-| Frontend | Vanilla HTML/CSS/JS, inlined into the Worker |
-| Deployment | Wrangler CLI |
-
-Everything runs on Cloudflare's free tier. No server, no database, no build step.
+| Sign-in | Google Identity Services ID-token flow (no client secret), HMAC session tokens |
+| Notifications | Web Push via [`webpush-edge`](https://github.com/mishra69/webpush-edge); Telegram Bot API as fallback |
+| Frontend | Vanilla HTML/CSS/JS, service worker, no build step |
 
 ### Project structure
 
 ```
 rsi-worker/
 ├── src/
-│   └── index.js        # Single file: Worker, HTML, all logic
-├── wrangler.jsonc       # Cloudflare config (KV binding, cron schedule)
-├── package.json
-└── package-lock.json
+│   ├── index.js          # router: /api/*, /telegram webhook, cron
+│   └── lib/
+│       ├── auth.js       # Google sign-in → HMAC session tokens
+│       ├── oidc.js       # ID-token verification (skill asset)
+│       ├── rsi.js        # Yahoo fetch + Wilder RSI
+│       ├── store.js      # KV layout (documented at the top)
+│       ├── push.js       # webpush-edge + endpoint index for rotation
+│       └── alerts.js     # per-user crossing detection + delivery
+├── public/               # the PWA shell (index.html, sw.js, manifest, icons, js/, css/, fonts/)
+├── scripts/make-icons.py # regenerates public/icons/
+├── deploy.sh + deploy.conf
+├── .skill-assets         # which files are verbatim skill copies (check drift with sync-assets.sh)
+└── wrangler.jsonc
 ```
 
-### KV key schema
+### API
 
-| Key | Value | Purpose |
-|---|---|---|
-| `s:{sid}:tickers` | `AAPL,MSFT,...` | Session ticker list |
-| `s:{sid}:index_tickers` | `SPY,QQQ,...` | Session index ticker list |
-| `snap:{sid}` | JSON `{TICKER: rsi}` | Last RSI snapshot for crossing detection |
-| `subscribers` | JSON array | All Telegram subscribers |
-| `tickers` | `AAPL,MSFT,...` | Legacy global ticker list (fallback) |
-| `index_tickers` | `SPY,QQQ,...` | Legacy global index list (fallback) |
+Public: `GET /api/config`, `GET /api/push/key`, `POST /api/push/rotate`, `POST /api/auth/google`, `POST /telegram` (bot webhook).
 
-Subscriber object shape:
-```json
-{ "sessionId": "abc123", "chatId": 123456789, "testMode": false }
-```
-
-### API endpoints
-
-| Method | Path | Description |
-|---|---|---|
-| `GET` | `/` | Serves the dashboard HTML |
-| `GET` | `/rsi?tickers=AAPL,MSFT` | Fetch RSI for tickers (max 30) |
-| `GET` | `/tickers?s=SESSION` | Get session's ticker list |
-| `POST` | `/tickers?s=SESSION` | Save session's ticker list |
-| `GET` | `/index-tickers?s=SESSION` | Get session's index ticker list |
-| `POST` | `/index-tickers?s=SESSION` | Save session's index ticker list |
-| `GET` | `/sub-status?s=SESSION` | Get subscription status + testMode flag |
-| `POST` | `/sub-test-mode?s=SESSION` | Toggle test mode for a session |
-| `POST` | `/test-alert?s=SESSION` | Immediately send a test Telegram message |
-| `POST` | `/unsubscribe?s=SESSION` | Unsubscribe from alerts |
-| `POST` | `/telegram` | Telegram webhook receiver |
-| `GET` | `/health` | Health check |
-
-### Cron
-
-Schedule: `*/15 * * * 1-5` (every 15 min, Mon–Fri)
-
-The handler checks market hours (UTC 13:00–20:30 ≈ ET 9:00am–4:30pm). Subscribers with `testMode: true` bypass the market hours check.
-
-Alert logic: for each subscriber, fetch current RSI for all their tickers, compare against the last snapshot (`snap:{sid}`), fire a Telegram message only if a ticker **crossed** its threshold since the last run.
+Bearer-token: `GET /api/me`, `GET|POST /api/tickers`, `GET /api/rsi?tickers=`, `GET /api/search?q=`,
+`GET /api/push/status`, `POST /api/push/subscribe|unsubscribe|test`,
+`POST /api/alerts/test-mode|snapshot`, `POST /api/telegram/link|unlink`.
 
 ### Setup
 
 ```bash
 npm install
-npx wrangler login
 
-# Set the Telegram bot token as an encrypted secret
-npx wrangler secret put TELEGRAM_TOKEN
+# One-time: Google OAuth client (Web application), no secret needed.
+# Authorized JavaScript origins: https://rsi-stock-tracker.mishabhi.workers.dev, http://localhost:8787
+# Put the client ID in wrangler.jsonc → vars.GOOGLE_CLIENT_ID
 
-# Register Telegram webhook (one-time)
-curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://rsi-stock-tracker.YOUR-SUBDOMAIN.workers.dev/telegram"
+# Secrets
+npx wrangler secret put TOKEN_SECRET        # openssl rand -hex 32
+npx wrangler secret put VAPID_PRIVATE_JWK   # from `npx webpush-edge-vapid`; public half is in wrangler.jsonc
+npx wrangler secret put TELEGRAM_TOKEN      # fallback channel
 
-# Deploy
-npm run deploy
-
-# Local dev
-npm run dev
+# Deploy (stamps the version, deploys, waits for propagation, commits the stamp)
+./deploy.sh
 ```
 
-### RSI calculation
-
-Uses Wilder's smoothing method over 14 periods. Fetches ~4 months of daily closes from Yahoo Finance to ensure the RSI is well-stabilised before reporting the value.
+Local dev: put `TOKEN_SECRET` and `VAPID_PRIVATE_JWK` in `.dev.vars` (gitignored), then
+`npx wrangler dev --test-scheduled` and trigger the cron with `curl localhost:8787/__scheduled`.
 
 ### Limits
 
-- **Yahoo Finance**: unofficial API, no published rate limit. ~50 tickers per session is safe; beyond that you risk sporadic 429s from Cloudflare's shared egress IPs.
-- **Cloudflare Workers free tier**: 100k requests/day, 10ms CPU per invocation.
-- **KV free tier**: 100k reads/day, 1k writes/day.
+- **Yahoo Finance**: unofficial API, no published rate limit. ~50 tickers per user is safe.
+- **Workers free tier**: 100k requests/day. **KV free tier**: 100k reads/day, 1k writes/day — the cron writes one snapshot per user per run (~96/day/user).

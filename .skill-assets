@@ -1,0 +1,14 @@
+# Verbatim copies of pwa-cloudflare skill assets. Check for drift with:
+#   ../.claude/skills/pwa-cloudflare/sync-assets.sh
+# and take the skill's version with --apply.
+#
+# Templates every app rewrites (sw.js, pwa.css, head.html, make-icons.py) are
+# deliberately NOT listed.
+
+# skill-version: 1.4.0
+
+oidc.js            src/lib/oidc.js
+pwa-install.js     public/js/pwa-install.js
+version-check.js   public/js/version-check.js
+deploy.sh          deploy.sh
+_headers           public/_headers
