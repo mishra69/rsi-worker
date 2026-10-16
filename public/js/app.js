@@ -739,6 +739,70 @@ $("#versionTag").addEventListener("click", async () => {
   setTimeout(() => VersionUI.render(), 6000);
 });
 
+// ── Alert log ───────────────────────────────────────────────────────────────
+
+const logBody = $("#logBody");
+
+$("#logToggle").addEventListener("click", () => {
+  const opening = logBody.classList.contains("hidden");
+  logBody.classList.toggle("hidden");
+  $("#logArrow").classList.toggle("open");
+  if (opening) loadLog();
+});
+
+function logDayLabel(d) {
+  const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const diff = Math.round((today - day) / 86400e3);
+  if (diff === 0) return "Today";
+  if (diff === 1) return "Yesterday";
+  return d.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+}
+
+async function loadLog() {
+  const hint = $("#logHint");
+  const list = $("#logList");
+  hint.hidden = false;
+  hint.textContent = "Loading…";
+  let data;
+  try {
+    data = await api("/api/alerts/log");
+  } catch (e) {
+    hint.textContent = e.message === "offline" ? "The log needs a connection." : "Couldn't load the log: " + e.message;
+    return;
+  }
+  list.replaceChildren();
+  if (!data.entries.length) {
+    hint.textContent = "No BUY or SELL alerts in the last " + data.retentionDays + " days.";
+    return;
+  }
+  hint.textContent = "BUY and SELL crossings from the last " + data.retentionDays + " days, newest first.";
+  let lastDay = null;
+  for (const e of data.entries) {
+    const d = new Date(e.t);
+    const day = logDayLabel(d);
+    if (day !== lastDay) {
+      const h = document.createElement("div");
+      h.className = "log-day";
+      h.textContent = day;
+      list.append(h);
+      lastDay = day;
+    }
+    const row = document.createElement("div");
+    row.className = "log-row";
+    const cell = (cls, text) => { const s = document.createElement("span"); s.className = cls; s.textContent = text; return s; };
+    const ticker = cell("log-ticker", e.ticker);
+    if (e.index) ticker.append(cell("idx", "INDEX"));
+    row.append(
+      cell("log-time", d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })),
+      cell("log-signal " + e.signal.toLowerCase(), e.signal),
+      ticker,
+      cell("log-rsi", "RSI " + Number(e.rsi).toFixed(1)),
+    );
+    list.append(row);
+  }
+}
+
 // ── Sign-in ─────────────────────────────────────────────────────────────────
 
 function loadGoogleScript() {

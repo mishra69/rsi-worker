@@ -4,7 +4,7 @@
 // an API call, the Telegram webhook, or a 404. Same origin throughout: no CORS.
 import { userFromRequest, signInWithGoogle } from "./lib/auth.js";
 import { fetchRSI } from "./lib/rsi.js";
-import { getUser, putUser, upsertUser, getRoster, getTickers, putTickers, parseList } from "./lib/store.js";
+import { getUser, putUser, upsertUser, getRoster, getTickers, putTickers, parseList, getLog, LOG_RETENTION_DAYS } from "./lib/store.js";
 import { pusherFor, rotateEndpoint } from "./lib/push.js";
 import { processUser, sendTelegram } from "./lib/alerts.js";
 
@@ -172,6 +172,10 @@ async function route(request, env, url) {
   }
 
   // ── Alerts (all channels) ──
+
+  if (path === "/api/alerts/log" && method === "GET") {
+    return json({ entries: await getLog(env, userId), retentionDays: LOG_RETENTION_DAYS });
+  }
 
   if (path === "/api/alerts/test-mode" && method === "POST") {
     const { testMode } = await request.json().catch(() => ({}));

@@ -229,6 +229,18 @@
       </div>
     </div>
 
+    <!-- Alert history. Collapsed and fetched on open: it's for looking back, not for every launch. -->
+    <div class="config-panel log-panel">
+      <button class="config-toggle" id="logToggle">
+        <span>ALERT LOG</span>
+        <span class="arrow" id="logArrow">▾</span>
+      </button>
+      <div class="config-body hidden" id="logBody">
+        <p class="hint" id="logHint">Loading…</p>
+        <div id="logList"></div>
+      </div>
+    </div>
+
     <div class="legend">
       <span><span style="color:var(--green)">●</span> Buy ≤ 30</span>
       <span><span style="color:var(--orange)">●</span> Weak &lt; 50</span>

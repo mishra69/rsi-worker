@@ -2,7 +2,7 @@
 // last snapshot, and alert on threshold *crossings* — on every channel they have.
 // Web Push is the primary channel; Telegram is a fallback for users who link it.
 import { fetchRSI } from "./rsi.js";
-import { getUser, getTickers, parseList } from "./store.js";
+import { getUser, getTickers, parseList, appendLog } from "./store.js";
 import { pusherFor } from "./push.js";
 
 const ZONE_ORDER = { oversold: 0, overbought: 1, below_midline: 2, above_midline: 3 };
@@ -39,7 +39,7 @@ export async function processUser(env, id, { snapshot = false } = {}) {
     const user = await getUser(env, id);
     if (!user) return null;
     const devices = await pusherFor(env).list(id);
-    if (devices.length === 0 && !user.chatId) return null; // nowhere to deliver
+    // No early return for a user with no devices: the in-app log is a channel too.
 
     const lists = await getTickers(env, id);
     const indexTickers = new Set(parseList(lists.indexTickers));
@@ -78,6 +78,13 @@ export async function processUser(env, id, { snapshot = false } = {}) {
       if (r.rsi >= 70 && prev < 70) sells.push({ ...r, isIndex });
     }
     if (buys.length === 0 && sells.length === 0) return null;
+
+    // Crossings only. Test-mode snapshots returned above and stay out of the log,
+    // or a 15-minute snapshot would bury the real alerts.
+    const now = Date.now();
+    const entry = signal => r => ({ t: now, signal, ticker: r.ticker, rsi: Math.round(r.rsi * 10) / 10, index: r.isIndex });
+    await appendLog(env, id, [...buys.map(entry("BUY")), ...sells.map(entry("SELL"))], now);
+    if (devices.length === 0 && !user.chatId) return null; // logged; nowhere else to deliver
 
     const tg = ["🔔 <b>RSI Alert</b>"];
     const lines = [];
