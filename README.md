@@ -12,7 +12,7 @@ from a single Cloudflare Worker. Built with the `pwa-cloudflare` skill.
 1. Open the app and **sign in with Google** — your lists are tied to your account and follow you to any device
 2. Open **Configuration** and add your tickers
 3. **Install it**: on iPhone/iPad tap Share → Add to Home Screen; on desktop Chrome use the install prompt
-4. Open **Alerts** → **Turn on notifications** (on iPhone this only works from the Home Screen app)
+4. Tap **Turn on** in the banner, or later: tap your **avatar** → Settings → **Turn on notifications** (on iPhone this only works from the Home Screen app)
 
 ### Ticker lists
 
@@ -26,12 +26,13 @@ from a single Cloudflare Worker. Built with the `pwa-cloudflare` skill.
 
 ### Alerts
 
-Checked every 15 min. A notification fires when a ticker **crosses** a threshold while its market is in regular session (works for any exchange — US, NSE, ...). Every device you turn notifications on for gets the alert.
+Alert settings live in **Settings** (tap your avatar). Checked every 15 min. A notification fires when a ticker **crosses** a threshold while its market is in regular session (works for any exchange — US, NSE, ...). Every device you turn notifications on for gets the alert.
 
 - **Test mode** — sends a full RSI snapshot every 15 min regardless of crossings
 - **Send snapshot now** — one immediate snapshot to every channel
-- **Tap the build stamp** at the bottom — sends a test push and shows the push service's raw status (201 ok, 403 VAPID mismatch, 410 subscription gone)
+- **Tap the build stamp** at the bottom of Settings — sends a test push and shows the push service's raw status (201 ok, 403 VAPID mismatch, 410 subscription gone)
 - **Telegram (fallback)** — tap *Get link code* and send `/subscribe CODE` to the bot; Telegram then gets the same alerts
+- **Alert log** — at the bottom of the main page: every BUY/SELL crossing from the last 30 days
 
 ### Offline
 
@@ -79,7 +80,7 @@ Public: `GET /api/config`, `GET /api/push/key`, `POST /api/push/rotate`, `POST /
 
 Bearer-token: `GET /api/me`, `GET|POST /api/tickers`, `GET /api/rsi?tickers=`, `GET /api/search?q=`,
 `GET /api/push/status`, `POST /api/push/subscribe|unsubscribe|test`,
-`POST /api/alerts/test-mode|snapshot`, `POST /api/telegram/link|unlink`.
+`GET /api/alerts/log`, `POST /api/alerts/test-mode|snapshot`, `POST /api/telegram/link|unlink`.
 
 ### Setup
 

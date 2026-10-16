@@ -32,60 +32,156 @@
 
   <!-- ── App ── -->
   <div class="container" id="app" hidden>
-    <div class="header">
-      <h1>RSI TRACKER</h1>
-      <span class="badge">RSI(14) · DAILY</span>
-      <div class="account">
-        <span class="avatar" id="avatar" title=""></span>
-        <button class="link-btn" id="signOutBtn">SIGN OUT</button>
+    <div id="mainView">
+      <div class="header">
+        <h1>RSI TRACKER</h1>
+        <span class="badge">RSI(14) · DAILY</span>
+        <button class="avatar" id="avatar" title="Settings" aria-label="Settings"></button>
       </div>
-    </div>
-    <div class="status-bar" id="statusBar"></div>
+      <div class="status-bar" id="statusBar"></div>
 
-    <!-- One-time nudge to turn on notifications. A button, not an automatic
-         prompt: iOS only shows the permission sheet from inside a tap. -->
-    <div class="push-nudge" id="pushNudge" hidden>
-      <p class="hint" id="pushNudgeText">Get a notification on this device when a ticker crosses into BUY or SELL.</p>
-      <div class="btn-row">
-        <button class="btn" id="pushNudgeOn">TURN ON</button>
-        <button class="link-btn" id="pushNudgeLater">NOT NOW</button>
-      </div>
-    </div>
-
-    <div class="config-panel">
-      <button class="config-toggle" id="configToggle">
-        <span>CONFIGURATION</span>
-        <span class="arrow open" id="configArrow">▾</span>
-      </button>
-      <div class="config-body hidden" id="configBody">
-        <div style="position:relative;">
-          <label class="field-label">SEARCH — find ticker by company name</label>
-          <input class="field-input" id="searchInput" type="text" placeholder="e.g. Apple, Reliance, HDFC" autocomplete="off">
-          <div id="searchDropdown" class="search-dropdown" style="display:none;"></div>
-        </div>
-        <div>
-          <label class="field-label">TICKERS — alert below 30 or above 70</label>
-          <textarea class="field-input field-textarea" id="tickersInput"
-            placeholder="AAPL,MSFT,GOOGL,TSLA" rows="3"></textarea>
-        </div>
-        <div>
-          <label class="field-label">INDEX TICKERS — also alert below 50</label>
-          <textarea class="field-input field-textarea" id="indexTickersInput"
-            placeholder="SPY,QQQ,VUG" rows="3"></textarea>
-        </div>
-        <div style="display:flex;align-items:center;gap:12px;">
-          <button class="btn" id="fetchBtn">UPDATE LIST</button>
-          <span class="saved-flash" id="savedFlash">✓ Saved</span>
+      <!-- One-time nudge to turn on notifications. A button, not an automatic
+           prompt: iOS only shows the permission sheet from inside a tap. -->
+      <div class="push-nudge" id="pushNudge" hidden>
+        <p class="hint" id="pushNudgeText">Get a notification on this device when a ticker crosses into BUY or SELL.</p>
+        <div class="btn-row">
+          <button class="btn" id="pushNudgeOn">TURN ON</button>
+          <button class="link-btn" id="pushNudgeLater">NOT NOW</button>
         </div>
       </div>
+
+      <div class="config-panel">
+        <button class="config-toggle" id="configToggle">
+          <span>CONFIGURATION</span>
+          <span class="arrow open" id="configArrow">▾</span>
+        </button>
+        <div class="config-body hidden" id="configBody">
+          <div style="position:relative;">
+            <label class="field-label">SEARCH — find ticker by company name</label>
+            <input class="field-input" id="searchInput" type="text" placeholder="e.g. Apple, Reliance, HDFC" autocomplete="off">
+            <div id="searchDropdown" class="search-dropdown" style="display:none;"></div>
+          </div>
+          <div>
+            <label class="field-label">TICKERS — alert below 30 or above 70</label>
+            <textarea class="field-input field-textarea" id="tickersInput"
+              placeholder="AAPL,MSFT,GOOGL,TSLA" rows="3"></textarea>
+          </div>
+          <div>
+            <label class="field-label">INDEX TICKERS — also alert below 50</label>
+            <textarea class="field-input field-textarea" id="indexTickersInput"
+              placeholder="SPY,QQQ,VUG" rows="3"></textarea>
+          </div>
+          <div style="display:flex;align-items:center;gap:12px;">
+            <button class="btn" id="fetchBtn">UPDATE LIST</button>
+            <span class="saved-flash" id="savedFlash">✓ Saved</span>
+          </div>
+        </div>
+      </div>
+
+
+
+      <div class="error-box" id="errorBox" style="display:none;"></div>
+
+      <div id="editToolbar" style="display:none; margin-bottom:10px; align-items:center; gap:10px;">
+        <button class="btn" id="modifyListBtn">MODIFY LIST</button>
+        <button class="btn btn-danger" id="deleteSelectedBtn" style="display:none;">DELETE SELECTED</button>
+        <button class="btn" id="doneEditBtn" style="display:none;">DONE</button>
+      </div>
+
+      <div id="buySection" style="display:none;">
+        <div class="section-header buy">
+          <span class="section-title">BUY</span>
+          <span class="section-sub">RSI ≤ 30 · Oversold</span>
+        </div>
+        <div class="table-wrap">
+          <div class="table-header">
+            <span>Ticker</span><span>Price</span><span>Chg</span>
+            <span>RSI Bar</span><span style="text-align:right">RSI</span>
+          </div>
+          <div id="buyBody"></div>
+        </div>
+      </div>
+
+      <div id="sellSection" style="display:none;">
+        <div class="section-header sell">
+          <span class="section-title">SELL</span>
+          <span class="section-sub">RSI ≥ 70 · Overbought</span>
+        </div>
+        <div class="table-wrap">
+          <div class="table-header">
+            <span>Ticker</span><span>Price</span><span>Chg</span>
+            <span>RSI Bar</span><span style="text-align:right">RSI</span>
+          </div>
+          <div id="sellBody"></div>
+        </div>
+      </div>
+
+      <div class="empty" id="emptyState">Loading tickers...</div>
+
+      <div id="allSection" style="display:none;">
+        <button class="all-toggle" id="allToggle">
+          <div style="display:flex;align-items:baseline;gap:12px;">
+            <span class="section-title" style="color:var(--text-dim)">ALL</span>
+            <span class="section-sub" id="allSub">All scanned tickers</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span id="rsiSortBtn" class="sort-btn">RSI <span id="rsiSortArrow">↕</span></span>
+            <span class="arrow open" id="allArrow">▾</span>
+          </div>
+        </button>
+        <div id="allBody" class="table-wrap">
+          <div class="table-header table-header-all">
+            <span>Ticker</span><span>Price</span><span>Chg</span>
+            <span>RSI Bar</span><span style="text-align:right">RSI</span>
+            <span style="text-align:center">Signal</span>
+          </div>
+          <div id="allRows"></div>
+        </div>
+      </div>
+
+      <!-- Alert history. Collapsed and fetched on open: it's for looking back, not for every launch. -->
+      <div class="config-panel log-panel">
+        <button class="config-toggle" id="logToggle">
+          <span>ALERT LOG</span>
+          <span class="arrow" id="logArrow">▾</span>
+        </button>
+        <div class="config-body hidden" id="logBody">
+          <p class="hint" id="logHint">Loading…</p>
+          <div id="logList"></div>
+        </div>
+      </div>
+
+      <div class="legend">
+        <span><span style="color:var(--green)">●</span> Buy ≤ 30</span>
+        <span><span style="color:var(--orange)">●</span> Weak &lt; 50</span>
+        <span><span style="color:var(--neutral)">●</span> Firm ≥ 50</span>
+        <span><span style="color:var(--red)">●</span> Sell ≥ 70</span>
+      </div>
+
+      <div class="version-tag" data-version></div>
     </div>
 
-    <div class="config-panel">
-      <button class="config-toggle" id="alertsToggle">
-        <span>ALERTS</span>
-        <span class="arrow" id="alertsArrow">▾</span>
-      </button>
-      <div class="config-body hidden" id="alertsBody">
+    <!-- ── Settings (opened from the avatar; #settings in the URL so Back closes it) ── -->
+    <div id="settingsView" hidden>
+      <div class="header settings-header">
+        <button class="link-btn back-btn" id="settingsBack" aria-label="Back">‹ BACK</button>
+        <h1>SETTINGS</h1>
+      </div>
+
+      <div class="settings-group">
+        <div class="settings-title">ACCOUNT</div>
+        <div class="account-row">
+          <span class="avatar" id="settingsAvatar"></span>
+          <div class="account-who">
+            <div id="accountName"></div>
+            <div class="account-email" id="accountEmail"></div>
+          </div>
+          <button class="btn" id="signOutBtn">SIGN OUT</button>
+        </div>
+      </div>
+
+      <div class="settings-group" id="alertsBody">
+        <div class="settings-title">ALERTS</div>
         <div class="alert-section">
           <div class="alert-heading">NOTIFICATIONS ON THIS DEVICE</div>
           <p class="hint" id="pushHint"></p>
@@ -126,134 +222,62 @@
           </div>
         </div>
       </div>
-    </div>
 
-    <div class="config-panel">
-      <button class="config-toggle" id="helpToggle">
-        <span>HOW TO USE</span>
-        <span class="arrow" id="helpArrow">▾</span>
-      </button>
-      <div class="config-body hidden" id="helpBody">
-        <div class="help-grid">
-          <div class="help-block">
-            <div class="help-title">Two ticker lists</div>
-            <div class="help-text">
-              <b>TICKERS</b> — your individual stocks. Shows a <span style="color:var(--green)">BUY</span> signal when RSI drops below 30 (oversold), and a <span style="color:var(--red)">SELL</span> signal when RSI rises above 70 (overbought).<br><br>
-              <b>INDEX TICKERS</b> — slow-moving ETFs and broad market instruments. Same SELL threshold (≥70), but a lower BUY threshold — triggers when RSI drops below 50, since these instruments move more gradually.
+      <div class="settings-group">
+        <div class="settings-title">DISPLAY</div>
+        <div class="alert-section">
+          <label class="checkbox-label">
+            <input type="checkbox" id="autoRefreshChk" checked>
+            <span>Auto-refresh prices every 5 min while the app is open</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="config-panel">
+        <button class="config-toggle" id="helpToggle">
+          <span>HOW TO USE</span>
+          <span class="arrow" id="helpArrow">▾</span>
+        </button>
+        <div class="config-body hidden" id="helpBody">
+          <div class="help-grid">
+            <div class="help-block">
+              <div class="help-title">Two ticker lists</div>
+              <div class="help-text">
+                <b>TICKERS</b> — your individual stocks. Shows a <span style="color:var(--green)">BUY</span> signal when RSI drops below 30 (oversold), and a <span style="color:var(--red)">SELL</span> signal when RSI rises above 70 (overbought).<br><br>
+                <b>INDEX TICKERS</b> — slow-moving ETFs and broad market instruments. Same SELL threshold (≥70), but a lower BUY threshold — triggers when RSI drops below 50, since these instruments move more gradually.
+              </div>
+            </div>
+            <div class="help-block">
+              <div class="help-title">What is RSI?</div>
+              <div class="help-text">
+                RSI (Relative Strength Index) is a 0–100 momentum indicator based on the last 14 daily closes.<br><br>
+                <span style="color:var(--green)">≤ 30</span> — oversold, potential reversal upward<br>
+                <span style="color:var(--orange)">30–50</span> — weak momentum<br>
+                <span style="color:var(--neutral)">50–70</span> — firm momentum<br>
+                <span style="color:var(--red)">≥ 70</span> — overbought, potential reversal downward
+              </div>
+            </div>
+            <div class="help-block">
+              <div class="help-title">Install &amp; alerts</div>
+              <div class="help-text">
+                Your lists are tied to your Google account, so they follow you to any device.<br><br>
+                Alerts arrive as notifications, checked every 15 min while a ticker's market is open, when it <b>crosses</b> a threshold. On iPhone and iPad, add the app to your Home Screen first — iOS only allows notifications for installed apps.
+              </div>
+            </div>
+            <div class="help-block">
+              <div class="help-title">Data &amp; refresh</div>
+              <div class="help-text">
+                Price data comes from Yahoo Finance (unofficial API, free). The page auto-refreshes every 5 minutes while open.<br><br>
+                Data may be delayed during market hours and stale on weekends. Each ticker is fetched independently — if Yahoo Finance rate-limits a request, that ticker will show an error state rather than blocking the others.
+              </div>
             </div>
           </div>
-          <div class="help-block">
-            <div class="help-title">What is RSI?</div>
-            <div class="help-text">
-              RSI (Relative Strength Index) is a 0–100 momentum indicator based on the last 14 daily closes.<br><br>
-              <span style="color:var(--green)">≤ 30</span> — oversold, potential reversal upward<br>
-              <span style="color:var(--orange)">30–50</span> — weak momentum<br>
-              <span style="color:var(--neutral)">50–70</span> — firm momentum<br>
-              <span style="color:var(--red)">≥ 70</span> — overbought, potential reversal downward
-            </div>
-          </div>
-          <div class="help-block">
-            <div class="help-title">Install &amp; alerts</div>
-            <div class="help-text">
-              Your lists are tied to your Google account, so they follow you to any device.<br><br>
-              Alerts arrive as notifications, checked every 15 min while a ticker's market is open, when it <b>crosses</b> a threshold. On iPhone and iPad, add the app to your Home Screen first — iOS only allows notifications for installed apps.
-            </div>
-          </div>
-          <div class="help-block">
-            <div class="help-title">Data &amp; refresh</div>
-            <div class="help-text">
-              Price data comes from Yahoo Finance (unofficial API, free). The page auto-refreshes every 5 minutes while open.<br><br>
-              Data may be delayed during market hours and stale on weekends. Each ticker is fetched independently — if Yahoo Finance rate-limits a request, that ticker will show an error state rather than blocking the others.
-            </div>
-          </div>
         </div>
       </div>
+
+      <!-- Tap to send a test push and see the push service's raw answer. -->
+      <div class="version-tag" id="versionTag" data-version title="Tap to send a test notification"></div>
     </div>
-
-    <div class="error-box" id="errorBox" style="display:none;"></div>
-
-    <div id="editToolbar" style="display:none; margin-bottom:10px; align-items:center; gap:10px;">
-      <button class="btn" id="modifyListBtn">MODIFY LIST</button>
-      <button class="btn btn-danger" id="deleteSelectedBtn" style="display:none;">DELETE SELECTED</button>
-      <button class="btn" id="doneEditBtn" style="display:none;">DONE</button>
-    </div>
-
-    <div id="buySection" style="display:none;">
-      <div class="section-header buy">
-        <span class="section-title">BUY</span>
-        <span class="section-sub">RSI ≤ 30 · Oversold</span>
-      </div>
-      <div class="table-wrap">
-        <div class="table-header">
-          <span>Ticker</span><span>Price</span><span>Chg</span>
-          <span>RSI Bar</span><span style="text-align:right">RSI</span>
-        </div>
-        <div id="buyBody"></div>
-      </div>
-    </div>
-
-    <div id="sellSection" style="display:none;">
-      <div class="section-header sell">
-        <span class="section-title">SELL</span>
-        <span class="section-sub">RSI ≥ 70 · Overbought</span>
-      </div>
-      <div class="table-wrap">
-        <div class="table-header">
-          <span>Ticker</span><span>Price</span><span>Chg</span>
-          <span>RSI Bar</span><span style="text-align:right">RSI</span>
-        </div>
-        <div id="sellBody"></div>
-      </div>
-    </div>
-
-    <div class="empty" id="emptyState">Loading tickers...</div>
-
-    <div id="allSection" style="display:none;">
-      <button class="all-toggle" id="allToggle">
-        <div style="display:flex;align-items:baseline;gap:12px;">
-          <span class="section-title" style="color:var(--text-dim)">ALL</span>
-          <span class="section-sub" id="allSub">All scanned tickers</span>
-        </div>
-        <div style="display:flex;align-items:center;gap:10px;">
-          <span id="rsiSortBtn" class="sort-btn">RSI <span id="rsiSortArrow">↕</span></span>
-          <span class="arrow open" id="allArrow">▾</span>
-        </div>
-      </button>
-      <div id="allBody" class="table-wrap">
-        <div class="table-header table-header-all">
-          <span>Ticker</span><span>Price</span><span>Chg</span>
-          <span>RSI Bar</span><span style="text-align:right">RSI</span>
-          <span style="text-align:center">Signal</span>
-        </div>
-        <div id="allRows"></div>
-      </div>
-    </div>
-
-    <!-- Alert history. Collapsed and fetched on open: it's for looking back, not for every launch. -->
-    <div class="config-panel log-panel">
-      <button class="config-toggle" id="logToggle">
-        <span>ALERT LOG</span>
-        <span class="arrow" id="logArrow">▾</span>
-      </button>
-      <div class="config-body hidden" id="logBody">
-        <p class="hint" id="logHint">Loading…</p>
-        <div id="logList"></div>
-      </div>
-    </div>
-
-    <div class="legend">
-      <span><span style="color:var(--green)">●</span> Buy ≤ 30</span>
-      <span><span style="color:var(--orange)">●</span> Weak &lt; 50</span>
-      <span><span style="color:var(--neutral)">●</span> Firm ≥ 50</span>
-      <span><span style="color:var(--red)">●</span> Sell ≥ 70</span>
-      <label class="checkbox-label auto">
-        <input type="checkbox" id="autoRefreshChk" checked>
-        <span>Auto-refresh (5 min)</span>
-      </label>
-    </div>
-
-    <!-- Tap to send a test push and see the push service's raw answer. -->
-    <div class="version-tag" id="versionTag" data-version title="Tap to send a test notification"></div>
   </div>
 
   <script type="module">

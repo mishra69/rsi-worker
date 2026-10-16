@@ -328,7 +328,6 @@ button, .btn, [role="button"], input, select, a, label { touch-action: manipulat
 
 /* ── Header account ── */
 .header { align-items: center; }
-.account { margin-left: auto; display: flex; align-items: center; gap: 8px; }
 .avatar {
   width: 28px; height: 28px; border-radius: 50%;
   background: #1e293b; color: var(--text-dim);
@@ -337,6 +336,9 @@ button, .btn, [role="button"], input, select, a, label { touch-action: manipulat
   overflow: hidden; border: 1px solid var(--border-light);
 }
 .avatar img { width: 100%; height: 100%; object-fit: cover; }
+/* The header avatar is the way into Settings. */
+button.avatar { margin-left: auto; padding: 0; cursor: pointer; width: 32px; height: 32px; }
+button.avatar:hover { border-color: var(--text-muted); }
 .link-btn {
   background: none; border: none; color: var(--text-muted); cursor: pointer;
   font-family: var(--mono); font-size: 10px; letter-spacing: 1px; padding: 4px;
@@ -393,3 +395,20 @@ button, .btn, [role="button"], input, select, a, label { touch-action: manipulat
 .log-ticker { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .log-ticker .idx { color: var(--text-muted); font-size: 10px; margin-left: 4px; }
 .log-rsi { color: var(--text-dim); text-align: right; }
+
+/* ── Settings view ── */
+.settings-header { margin-bottom: 20px; }
+.back-btn { font-size: 12px; padding: 6px 8px 6px 0; }
+.settings-group {
+  margin-bottom: 16px; padding: 16px 20px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+}
+.settings-title {
+  font-family: var(--mono); font-size: 11px; font-weight: 600;
+  color: var(--text-dim); letter-spacing: 1.5px; margin-bottom: 14px;
+}
+.account-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.account-row .avatar { width: 40px; height: 40px; font-size: 14px; }
+.account-who { flex: 1; min-width: 0; font-size: 14px; }
+.account-email { font-family: var(--mono); font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; }
+.account-row .btn { align-self: center; }

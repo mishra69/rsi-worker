@@ -265,7 +265,7 @@ async function telegramWebhook(request, env) {
     const code = text.split(/\s+/)[1] || "";
     const userId = code && await env.RSI_KV.get(`tglink:${code}`);
     if (!userId) {
-      await sendTelegram(env, chatId, `That code is missing or expired. Open <a href="${appUrl}">the app</a> → Alerts → Telegram to get a fresh one.`, "HTML");
+      await sendTelegram(env, chatId, `That code is missing or expired. Open <a href="${appUrl}">the app</a> → your avatar → Settings → Telegram to get a fresh one.`, "HTML");
     } else {
       await env.RSI_KV.delete(`tglink:${code}`);
       const user = (await getUser(env, userId)) || {};
@@ -282,7 +282,7 @@ async function telegramWebhook(request, env) {
     }
     await sendTelegram(env, chatId, "✅ Unsubscribed. You won't receive any more Telegram alerts.");
   } else if (text.startsWith("/start") || text.startsWith("/help")) {
-    await sendTelegram(env, chatId, `👋 <b>RSI Alert Bot</b>\n\nCommands:\n• <code>/subscribe CODE</code> — link alerts to your account\n• <code>/unsubscribe</code> — stop alerts\n\nGet a code in <a href="${appUrl}">the app</a> → Alerts → Telegram.`, "HTML");
+    await sendTelegram(env, chatId, `👋 <b>RSI Alert Bot</b>\n\nCommands:\n• <code>/subscribe CODE</code> — link alerts to your account\n• <code>/unsubscribe</code> — stop alerts\n\nGet a code in <a href="${appUrl}">the app</a> → your avatar → Settings → Telegram.`, "HTML");
   }
 
   return new Response("ok");

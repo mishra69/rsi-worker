@@ -496,7 +496,12 @@ indexTickersInput.addEventListener("input", () => {
   }, 800);
 });
 
+// Remembered per device; on unless turned off.
+const AUTO_REFRESH_KEY = "rsi.autoRefresh";
+try { $("#autoRefreshChk").checked = localStorage.getItem(AUTO_REFRESH_KEY) !== "0"; } catch (e) {}
+
 $("#autoRefreshChk").addEventListener("change", (e) => {
+  try { localStorage.setItem(AUTO_REFRESH_KEY, e.target.checked ? "1" : "0"); } catch (err) {}
   if (e.target.checked) {
     scheduleRefresh();
   } else {
@@ -505,21 +510,14 @@ $("#autoRefreshChk").addEventListener("change", (e) => {
   }
 });
 
-// ── Alerts panel ────────────────────────────────────────────────────────────
+// ── Alerts (Settings) ───────────────────────────────────────────────────────
 
-const alertsBody = $("#alertsBody");
 const pushHint = $("#pushHint");
 const pushOnBtn = $("#pushOnBtn");
 const pushOffBtn = $("#pushOffBtn");
 const testModeChk = $("#testModeChk");
 const testSentFlash = $("#testSentFlash");
 
-$("#alertsToggle").addEventListener("click", () => {
-  const opening = alertsBody.classList.contains("hidden");
-  alertsBody.classList.toggle("hidden");
-  $("#alertsArrow").classList.toggle("open");
-  if (opening) refreshAlerts();
-});
 
 const PUSH_REASONS = {
   "needs-install": "Add the app to your Home Screen first, then turn notifications on from there.",
@@ -585,7 +583,7 @@ async function renderPush() {
 // ── One-time nudge ──
 // Alerts are the point of the app, but the switch lives in a collapsed panel,
 // so a signed-in device can sit with no notifications and nobody notices. Ask
-// once per device; whatever the answer, don't ask again — the Alerts panel
+// once per device; whatever the answer, don't ask again — Settings
 // stays the place to change it.
 const PUSH_NUDGE_KEY = "rsi.pushNudged";
 const pushNudge = $("#pushNudge");
@@ -618,7 +616,7 @@ $("#pushNudgeOn").addEventListener("click", async () => {
     const r = await Push.subscribe(PUSH_OPTS());
     if (r.ok) {
       nudgeDone();
-      if (!alertsBody.classList.contains("hidden")) renderPush();
+      if (!$("#settingsView").hidden) renderPush();
       return;
     }
     // A declined prompt is an answer; anything else is worth another tap.
@@ -860,11 +858,12 @@ async function showSignIn() {
 
 function renderAccount() {
   const p = JSON.parse(localStorage.getItem(PROFILE_KEY) || "{}");
-  const avatar = $("#avatar");
-  avatar.title = p.email || "";
+  $("#accountName").textContent = p.name || "";
+  $("#accountEmail").textContent = p.email || "";
   const initials = (p.name || p.email || "?").trim().charAt(0).toUpperCase();
-  avatar.textContent = initials;
-  if (p.picture) {
+  for (const avatar of [$("#avatar"), $("#settingsAvatar")]) {
+    avatar.textContent = initials;
+    if (!p.picture) continue;
     const img = new Image();
     img.alt = "";
     img.referrerPolicy = "no-referrer";
@@ -873,6 +872,53 @@ function renderAccount() {
     img.src = p.picture;
   }
 }
+
+// ── Settings view ───────────────────────────────────────────────────────────
+// A second screen in the same page, not a separate HTML page: it shares the
+// session, the service worker shell and the running refresh timer. #settings
+// is pushed onto history so the Android back button and the iOS edge swipe
+// close it like any other page.
+
+let mainScrollY = 0;
+
+function showView() {
+  const settings = location.hash === "#settings";
+  if (settings === !$("#settingsView").hidden) return;
+  if (settings) mainScrollY = window.scrollY;
+  $("#mainView").hidden = settings;
+  $("#settingsView").hidden = !settings;
+  if (settings) {
+    window.scrollTo(0, 0);
+    refreshAlerts();
+  } else {
+    window.scrollTo(0, mainScrollY);
+  }
+}
+
+// True while the #settings entry on the history stack is one we pushed, so
+// Back can pop it. Launching straight into /#settings (a reload) pushed
+// nothing, and history.back() would leave the app.
+let settingsPushed = false;
+
+function openSettings() {
+  if (location.hash !== "#settings") {
+    history.pushState(null, "", "#settings");
+    settingsPushed = true;
+  }
+  showView();
+}
+
+function closeSettings() {
+  if (settingsPushed) history.back(); // popstate runs showView
+  else { history.replaceState(null, "", location.pathname); showView(); }
+}
+
+$("#avatar").addEventListener("click", openSettings);
+$("#settingsBack").addEventListener("click", closeSettings);
+window.addEventListener("popstate", () => {
+  if (location.hash !== "#settings") settingsPushed = false;
+  showView();
+});
 
 async function signOut() {
   // Drop this device's push subscription so the next person to sign in here
@@ -885,6 +931,9 @@ async function signOut() {
   localStorage.removeItem(CACHE_KEY);
   if (refreshInterval) { clearInterval(refreshInterval); refreshInterval = null; }
   state = { ...state, tickers: "", indexTickers: "", stocks: [], lastUpdated: null };
+  if (location.hash) history.replaceState(null, "", location.pathname);
+  $("#mainView").hidden = false;
+  $("#settingsView").hidden = true;
   showSignIn();
 }
 
@@ -896,6 +945,7 @@ async function showApp() {
   $("#signinScreen").hidden = true;
   $("#app").hidden = false;
   renderAccount();
+  showView();
 
   // Paint the cached table immediately; the network catches up behind it.
   loadCache();
