@@ -529,6 +529,26 @@ const PUSH_REASONS = {
   "no-vapid-key": "The server isn't configured for notifications yet.",
 };
 
+async function pushStatus() {
+  const sub = await Push.currentSubscription();
+  const status = await api("/api/push/status" + (sub ? "?endpoint=" + encodeURIComponent(sub.endpoint) : ""));
+  return { sub, ...status };
+}
+
+// The browser can hold a live subscription the server has never seen — it was
+// made before this account signed in, the server copy was pruned, or the
+// subscribe POST was lost. Nothing else would ever re-send it, so the device
+// silently gets no alerts. Re-register it; permission is already granted, so
+// this needs no gesture and shows no prompt.
+async function syncPush() {
+  let status = await pushStatus();
+  if (status.sub && !status.thisDevice && Notification.permission === "granted") {
+    const r = await Push.subscribe({ ...PUSH_OPTS(), prompt: false });
+    if (r.ok) status = await pushStatus();
+  }
+  return status;
+}
+
 async function renderPush() {
   pushOnBtn.hidden = true;
   pushOffBtn.hidden = true;
@@ -547,11 +567,8 @@ async function renderPush() {
     return;
   }
 
-  let sub = null, status = { devices: 0, thisDevice: false };
-  try {
-    sub = await Push.currentSubscription();
-    status = await api("/api/push/status" + (sub ? "?endpoint=" + encodeURIComponent(sub.endpoint) : ""));
-  } catch (e) {}
+  let status = { devices: 0, thisDevice: false };
+  try { status = await syncPush(); } catch (e) {}
 
   if (status.thisDevice) {
     pushHint.innerHTML = '<span class="ok">✓ On for this device.</span> ' +
@@ -660,9 +677,11 @@ $("#versionTag").addEventListener("click", async () => {
   const tag = $("#versionTag");
   VersionUI.render("sending test push…");
   try {
+    if (window.Push && Push.pushSupport().supported) await syncPush().catch(() => {});
     const r = await api("/api/push/test", { method: "POST" });
     const statuses = (r.results || []).map(x => x.status).join(", ");
-    VersionUI.render(r.sent ? "push sent → " + statuses : "push not delivered → " + (statuses || "no devices") + (r.pruned ? " (" + r.pruned + " pruned)" : ""));
+    VersionUI.render(r.sent ? "push sent → " + statuses : "push not delivered → " +
+      (statuses || "no devices — turn on alerts in this app first") + (r.pruned ? " (" + r.pruned + " pruned)" : ""));
   } catch (e) {
     VersionUI.render("push test failed: " + e.message);
   }
