@@ -42,6 +42,16 @@
     </div>
     <div class="status-bar" id="statusBar"></div>
 
+    <!-- One-time nudge to turn on notifications. A button, not an automatic
+         prompt: iOS only shows the permission sheet from inside a tap. -->
+    <div class="push-nudge" id="pushNudge" hidden>
+      <p class="hint" id="pushNudgeText">Get a notification on this device when a ticker crosses into BUY or SELL.</p>
+      <div class="btn-row">
+        <button class="btn" id="pushNudgeOn">TURN ON</button>
+        <button class="link-btn" id="pushNudgeLater">NOT NOW</button>
+      </div>
+    </div>
+
     <div class="config-panel">
       <button class="config-toggle" id="configToggle">
         <span>CONFIGURATION</span>

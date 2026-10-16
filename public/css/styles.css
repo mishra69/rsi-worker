@@ -367,3 +367,9 @@ button, .btn, [role="button"], input, select, a, label { touch-action: manipulat
 .offline-note { color: var(--orange); }
 .hint { font-family: var(--sans); font-size: 12px; color: var(--text-muted); line-height: 1.6; margin-bottom: 10px; }
 .hint b { color: var(--text-dim); font-weight: 600; }
+
+.push-nudge {
+  margin-bottom: 16px; padding: 14px 16px;
+  background: var(--surface); border: 1px solid var(--border-light); border-radius: 8px;
+}
+.push-nudge .hint { margin: 0 0 10px; }

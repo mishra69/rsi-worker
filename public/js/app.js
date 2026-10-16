@@ -582,6 +582,57 @@ async function renderPush() {
   }
 }
 
+// ── One-time nudge ──
+// Alerts are the point of the app, but the switch lives in a collapsed panel,
+// so a signed-in device can sit with no notifications and nobody notices. Ask
+// once per device; whatever the answer, don't ask again — the Alerts panel
+// stays the place to change it.
+const PUSH_NUDGE_KEY = "rsi.pushNudged";
+const pushNudge = $("#pushNudge");
+
+function nudgeDone() {
+  try { localStorage.setItem(PUSH_NUDGE_KEY, "1"); } catch (e) {}
+  pushNudge.hidden = true;
+}
+
+async function maybeNudgePush() {
+  try { if (localStorage.getItem(PUSH_NUDGE_KEY)) return; } catch (e) { return; }
+  if (!window.Push) return;
+  // needs-install is the install prompt's job; blocked can't be fixed from a button.
+  const { state: support } = Push.pushSupport();
+  if (support !== "prompt" && support !== "granted") return;
+  try {
+    const status = await syncPush();
+    if (status.thisDevice) return;
+  } catch (e) { return; } // offline or signed out; try again next launch
+  pushNudge.hidden = false;
+}
+
+$("#pushNudgeOn").addEventListener("click", async () => {
+  // Must stay inside the click: iOS refuses the permission prompt outside a gesture.
+  const btn = $("#pushNudgeOn");
+  const text = $("#pushNudgeText");
+  btn.disabled = true;
+  text.textContent = "Turning on…";
+  try {
+    const r = await Push.subscribe(PUSH_OPTS());
+    if (r.ok) {
+      nudgeDone();
+      if (!alertsBody.classList.contains("hidden")) renderPush();
+      return;
+    }
+    // A declined prompt is an answer; anything else is worth another tap.
+    if (r.reason === "blocked" || r.reason === "dismissed") { nudgeDone(); return; }
+    text.textContent = PUSH_REASONS[r.reason] || "Couldn't turn on: " + r.reason;
+  } catch (e) {
+    text.textContent = "Couldn't turn on: " + e.message;
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+$("#pushNudgeLater").addEventListener("click", nudgeDone);
+
 pushOnBtn.addEventListener("click", async () => {
   // Must stay inside the click: iOS refuses the permission prompt outside a gesture.
   pushOnBtn.disabled = true;
@@ -589,7 +640,7 @@ pushOnBtn.addEventListener("click", async () => {
   try {
     const r = await Push.subscribe(PUSH_OPTS());
     if (!r.ok) pushHint.textContent = PUSH_REASONS[r.reason] || "Couldn't turn on: " + r.reason;
-    else await renderPush();
+    else { nudgeDone(); await renderPush(); }
   } catch (e) {
     pushHint.textContent = "Couldn't turn on: " + e.message;
   } finally {
@@ -800,6 +851,7 @@ async function showApp() {
   }
   render();
   if (!state.offline && (state.tickers || state.indexTickers)) fetchData();
+  if (!state.offline) maybeNudgePush();
 
   // Held until after sign-in: the install prompt would otherwise cover the sign-in button.
   PWAInstall.init({
